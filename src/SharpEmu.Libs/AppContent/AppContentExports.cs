@@ -4,6 +4,7 @@
 using SharpEmu.HLE;
 using System.Buffers.Binary;
 using System.Text;
+using System.Text.Json;
 
 namespace SharpEmu.Libs.AppContent;
 
@@ -11,6 +12,8 @@ public static class AppContentExports
 {
     private const ulong BootParamAttrOffset = 4;
     private const string Temp0MountPoint = "/temp0";
+    private const uint AppParamSkuFlag = 0;
+    private const int AppParamSkuFlagFull = 3;
 
     [SysAbiExport(
         Nid = "R9lA82OraNs",
@@ -60,6 +63,41 @@ public static class AppContentExports
     }
 
     [SysAbiExport(
+        Nid = "99b82IKXpH4",
+        ExportName = "sceAppContentAppParamGetInt",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libSceAppContent")]
+    public static int AppContentAppParamGetInt(CpuContext ctx)
+    {
+        var paramId = (uint)ctx[CpuRegister.Rdi];
+        var valueAddress = ctx[CpuRegister.Rsi];
+        if (valueAddress == 0)
+        {
+            return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_INVALID_ARGUMENT);
+        }
+
+        int value;
+        if (paramId == AppParamSkuFlag)
+        {
+            value = AppParamSkuFlagFull;
+        }
+        else if (!TryReadUserDefinedParam(paramId, out value))
+        {
+            return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_INVALID_ARGUMENT);
+        }
+
+        Span<byte> valueBytes = stackalloc byte[sizeof(int)];
+        BinaryPrimitives.WriteInt32LittleEndian(valueBytes, value);
+        if (!ctx.Memory.TryWrite(valueAddress, valueBytes))
+        {
+            return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
+        }
+
+        TraceAppContent($"app_param_get_int id={paramId} value={value}");
+        return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_OK);
+    }
+
+    [SysAbiExport(
         Nid = "buYbeLOGWmA",
         ExportName = "sceAppContentTemporaryDataMount2",
         Target = Generation.Gen4 | Generation.Gen5,
@@ -81,6 +119,69 @@ public static class AppContentExports
 
         ctx[CpuRegister.Rax] = 0;
         return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+    }
+
+    private static bool TryReadUserDefinedParam(uint paramId, out int value)
+    {
+        value = 0;
+        if (paramId is < 1 or > 4)
+        {
+            return false;
+        }
+
+        var app0Root = Environment.GetEnvironmentVariable("SHARPEMU_APP0_DIR");
+        if (string.IsNullOrWhiteSpace(app0Root))
+        {
+            return true;
+        }
+
+        var paramJsonPath = Path.Combine(app0Root, "sce_sys", "param.json");
+        if (!File.Exists(paramJsonPath))
+        {
+            return true;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(paramJsonPath);
+            using var document = JsonDocument.Parse(stream);
+            var propertyName = $"userDefinedParam{paramId}";
+            if (document.RootElement.TryGetProperty(propertyName, out var element) &&
+                element.TryGetInt32(out var parsedValue))
+            {
+                value = parsedValue;
+            }
+
+            return true;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return true;
+        }
+        catch (JsonException)
+        {
+            return true;
+        }
+    }
+
+    private static int SetReturn(CpuContext ctx, OrbisGen2Result result)
+    {
+        ctx[CpuRegister.Rax] = unchecked((ulong)(int)result);
+        return (int)result;
+    }
+
+    private static void TraceAppContent(string message)
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("SHARPEMU_LOG_APP_CONTENT"), "1", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        Console.Error.WriteLine($"[LOADER][TRACE] app_content.{message}");
     }
 
     private static string ResolveTemp0Root()
