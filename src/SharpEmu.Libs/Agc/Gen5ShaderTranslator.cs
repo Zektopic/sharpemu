@@ -452,6 +452,7 @@ internal static class Gen5ShaderTranslator
             0x2A => "SNorSaveexecB64",
             0x2B => "SXnorSaveexecB64",
             0x37 => "SAndn1SaveexecB64",
+            0x38 => "SOrn1SaveexecB64",
             _ => string.Empty,
         };
 

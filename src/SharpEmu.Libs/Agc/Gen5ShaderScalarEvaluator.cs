@@ -812,7 +812,11 @@ internal static class Gen5ShaderScalarEvaluator
                 "SFF1I32B32" => left == 0 ? uint.MaxValue : (uint)BitOperations.TrailingZeroCount(left),
                 _ => registers[destination.Value] | (1u << ((int)left & 31)),
             };
-            scalarConditionCode = registers[destination.Value] != 0;
+            if (instruction.Opcode != "SBitset1B32")
+            {
+                scalarConditionCode = registers[destination.Value] != 0;
+            }
+
             return true;
         }
 
@@ -838,13 +842,15 @@ internal static class Gen5ShaderScalarEvaluator
                 }
             case "SSubU32":
                 result = left - right;
-                scalarConditionCode = left >= right;
+                scalarConditionCode = right > left;
                 break;
             case "SAddI32":
                 result = unchecked((uint)((int)left + (int)right));
+                scalarConditionCode = SignedAddOverflow(left, right, result);
                 break;
             case "SSubI32":
                 result = unchecked((uint)((int)left - (int)right));
+                scalarConditionCode = SignedSubOverflow(left, right, result);
                 break;
             case "SAddcU32":
                 {
@@ -855,23 +861,27 @@ internal static class Gen5ShaderScalarEvaluator
                 }
             case "SSubbU32":
                 {
-                    var borrow = scalarConditionCode ? 0UL : 1UL;
+                    var borrow = scalarConditionCode ? 1UL : 0UL;
                     var subtrahend = (ulong)right + borrow;
                     result = unchecked(left - (uint)subtrahend);
-                    scalarConditionCode = left >= subtrahend;
+                    scalarConditionCode = subtrahend > left;
                     break;
                 }
             case "SMinI32":
                 result = unchecked((uint)Math.Min((int)left, (int)right));
+                scalarConditionCode = (int)left < (int)right;
                 break;
             case "SMinU32":
                 result = Math.Min(left, right);
+                scalarConditionCode = left < right;
                 break;
             case "SMaxI32":
                 result = unchecked((uint)Math.Max((int)left, (int)right));
+                scalarConditionCode = (int)left > (int)right;
                 break;
             case "SMaxU32":
                 result = Math.Max(left, right);
+                scalarConditionCode = left > right;
                 break;
             case "SCselectB32":
                 result = scalarConditionCode ? left : right;
@@ -935,6 +945,7 @@ internal static class Gen5ShaderScalarEvaluator
                     var offset = (int)right & 31;
                     var width = Math.Min(((int)right >> 16) & 0x7F, 32 - offset);
                     result = width == 0 ? 0 : left >> offset & (uint.MaxValue >> (32 - width));
+                    scalarConditionCode = result != 0;
                     break;
                 }
             case "SBfeI32":
@@ -944,23 +955,41 @@ internal static class Gen5ShaderScalarEvaluator
                     result = width == 0
                         ? 0
                         : unchecked((uint)(((int)(left << (32 - width - offset))) >> (32 - width)));
+                    scalarConditionCode = result != 0;
                     break;
                 }
             case "SAbsdiffI32":
                 result = unchecked((uint)Math.Abs((long)(int)left - (int)right));
+                scalarConditionCode = result != 0;
                 break;
             case "SLshl1AddU32":
-                result = (left << 1) + right;
-                break;
+                {
+                    var wide = ((ulong)left << 1) + right;
+                    result = (uint)wide;
+                    scalarConditionCode = wide > uint.MaxValue;
+                    break;
+                }
             case "SLshl2AddU32":
-                result = (left << 2) + right;
-                break;
+                {
+                    var wide = ((ulong)left << 2) + right;
+                    result = (uint)wide;
+                    scalarConditionCode = wide > uint.MaxValue;
+                    break;
+                }
             case "SLshl3AddU32":
-                result = (left << 3) + right;
-                break;
+                {
+                    var wide = ((ulong)left << 3) + right;
+                    result = (uint)wide;
+                    scalarConditionCode = wide > uint.MaxValue;
+                    break;
+                }
             case "SLshl4AddU32":
-                result = (left << 4) + right;
-                break;
+                {
+                    var wide = ((ulong)left << 4) + right;
+                    result = (uint)wide;
+                    scalarConditionCode = wide > uint.MaxValue;
+                    break;
+                }
             case "SPackLlB32B16":
                 result = (left & 0xFFFFu) | (right << 16);
                 break;
@@ -1002,7 +1031,8 @@ internal static class Gen5ShaderScalarEvaluator
             "SNandSaveexecB64" or
             "SNorSaveexecB64" or
             "SXnorSaveexecB64" or
-            "SAndn1SaveexecB64"))
+            "SAndn1SaveexecB64" or
+            "SOrn1SaveexecB64"))
         {
             return false;
         }
@@ -1030,11 +1060,12 @@ internal static class Gen5ShaderScalarEvaluator
             "SAndSaveexecB64" => oldExec & source,
             "SOrSaveexecB64" => oldExec | source,
             "SXorSaveexecB64" => oldExec ^ source,
-            "SAndn1SaveexecB64" => ~oldExec & source,
-            "SAndn2SaveexecB64" => oldExec & ~source,
-            "SOrn2SaveexecB64" => oldExec | ~source,
-            "SNandSaveexecB64" => ~(oldExec & source),
-            "SNorSaveexecB64" => ~(oldExec | source),
+            "SAndn1SaveexecB64" => ~source & oldExec,
+            "SAndn2SaveexecB64" => source & ~oldExec,
+            "SOrn1SaveexecB64" => ~source | oldExec,
+            "SOrn2SaveexecB64" => source | ~oldExec,
+            "SNandSaveexecB64" => ~(source & oldExec),
+            "SNorSaveexecB64" => ~(source | oldExec),
             _ => ~(oldExec ^ source),
         };
 
@@ -1103,6 +1134,12 @@ internal static class Gen5ShaderScalarEvaluator
     }
 
     private static ulong MaskWaveValue(ulong value) => value & RdnaWaveMask;
+
+    private static bool SignedAddOverflow(uint left, uint right, uint result) =>
+        ((left ^ result) & (right ^ result) & 0x80000000u) != 0;
+
+    private static bool SignedSubOverflow(uint left, uint right, uint result) =>
+        ((left ^ right) & (left ^ result) & 0x80000000u) != 0;
 
     private static bool TryExecuteScalarCompare(
         Gen5ShaderInstruction instruction,

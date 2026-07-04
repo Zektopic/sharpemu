@@ -649,6 +649,20 @@ internal static partial class Gen5SpirvTranslator
                         width);
                     break;
                 }
+                case "VBfiB32":
+                {
+                    var mask = GetRawSource(instruction, 0);
+                    var insert = GetRawSource(instruction, 1);
+                    var source = GetRawSource(instruction, 2);
+                    result = _module.AddInstruction(
+                        SpirvOp.BitwiseOr,
+                        _uintType,
+                        BitwiseAnd(mask, insert),
+                        BitwiseAnd(
+                            _module.AddInstruction(SpirvOp.Not, _uintType, mask),
+                            source));
+                    break;
+                }
                 case "VCvtPkrtzF16F32":
                 {
                     var first = TruncateFloat32ForPack(GetFloatSource(instruction, 0));
@@ -961,6 +975,16 @@ internal static partial class Gen5SpirvTranslator
                     StoreS(destination, result);
                     Store(_scc, IsNotZero(result));
                     return true;
+                case "SBitset1B32":
+                    result = _module.AddInstruction(
+                        SpirvOp.BitFieldInsert,
+                        _uintType,
+                        LoadS(destination),
+                        UInt(1),
+                        BitwiseAnd(left, UInt(31)),
+                        UInt(1));
+                    StoreS(destination, result);
+                    return true;
                 default:
                 {
                     if (instruction.Sources.Count < 2)
@@ -987,13 +1011,14 @@ internal static partial class Gen5SpirvTranslator
                                 left,
                                 right);
                             Store(_scc, _module.AddInstruction(
-                                SpirvOp.UGreaterThanEqual,
+                                SpirvOp.UGreaterThan,
                                 _boolType,
-                                left,
-                                right));
+                                right,
+                                left));
                             break;
                         case "SAddI32":
                             result = IAdd(left, right);
+                            Store(_scc, SignedAddOverflow(left, right, result));
                             break;
                         case "SSubI32":
                             result = _module.AddInstruction(
@@ -1001,6 +1026,7 @@ internal static partial class Gen5SpirvTranslator
                                 _uintType,
                                 left,
                                 right);
+                            Store(_scc, SignedSubOverflow(left, right, result));
                             break;
                         case "SAddcU32":
                         {
@@ -1037,8 +1063,8 @@ internal static partial class Gen5SpirvTranslator
                                 SpirvOp.Select,
                                 _uintType,
                                 Load(_boolType, _scc),
-                                UInt(0),
-                                UInt(1));
+                                UInt(1),
+                                UInt(0));
                             var partial = _module.AddInstruction(
                                 SpirvOp.ISub,
                                 _uintType,
@@ -1049,23 +1075,31 @@ internal static partial class Gen5SpirvTranslator
                                 _uintType,
                                 partial,
                                 borrow);
-                            var firstNoBorrow = _module.AddInstruction(
-                                SpirvOp.UGreaterThanEqual,
+                            var firstBorrow = _module.AddInstruction(
+                                SpirvOp.UGreaterThan,
                                 _boolType,
-                                left,
-                                right);
-                            var secondNoBorrow = _module.AddInstruction(
-                                SpirvOp.UGreaterThanEqual,
+                                right,
+                                left);
+                            var secondBorrow = _module.AddInstruction(
+                                SpirvOp.LogicalAnd,
                                 _boolType,
-                                partial,
-                                borrow);
+                                _module.AddInstruction(
+                                    SpirvOp.IEqual,
+                                    _boolType,
+                                    borrow,
+                                    UInt(1)),
+                                _module.AddInstruction(
+                                    SpirvOp.IEqual,
+                                    _boolType,
+                                    right,
+                                    left));
                             Store(
                                 _scc,
                                 _module.AddInstruction(
-                                    SpirvOp.LogicalAnd,
+                                    SpirvOp.LogicalOr,
                                     _boolType,
-                                    firstNoBorrow,
-                                    secondNoBorrow));
+                                    firstBorrow,
+                                    secondBorrow));
                             break;
                         }
                         case "SMulI32":
@@ -1077,6 +1111,7 @@ internal static partial class Gen5SpirvTranslator
                             break;
                         case "SAndB32":
                             result = BitwiseAnd(left, right);
+                            Store(_scc, IsNotZero(result));
                             break;
                         case "SOrB32":
                             result = _module.AddInstruction(
@@ -1084,6 +1119,7 @@ internal static partial class Gen5SpirvTranslator
                                 _uintType,
                                 left,
                                 right);
+                            Store(_scc, IsNotZero(result));
                             break;
                         case "SXorB32":
                             result = _module.AddInstruction(
@@ -1091,22 +1127,64 @@ internal static partial class Gen5SpirvTranslator
                                 _uintType,
                                 left,
                                 right);
+                            Store(_scc, IsNotZero(result));
                             break;
                         case "SAndn2B32":
                             result = BitwiseAnd(
                                 left,
                                 _module.AddInstruction(SpirvOp.Not, _uintType, right));
+                            Store(_scc, IsNotZero(result));
+                            break;
+                        case "SOrn2B32":
+                            result = _module.AddInstruction(
+                                SpirvOp.BitwiseOr,
+                                _uintType,
+                                left,
+                                _module.AddInstruction(SpirvOp.Not, _uintType, right));
+                            Store(_scc, IsNotZero(result));
+                            break;
+                        case "SNandB32":
+                            result = _module.AddInstruction(
+                                SpirvOp.Not,
+                                _uintType,
+                                BitwiseAnd(left, right));
+                            Store(_scc, IsNotZero(result));
+                            break;
+                        case "SNorB32":
+                            result = _module.AddInstruction(
+                                SpirvOp.Not,
+                                _uintType,
+                                _module.AddInstruction(
+                                    SpirvOp.BitwiseOr,
+                                    _uintType,
+                                    left,
+                                    right));
+                            Store(_scc, IsNotZero(result));
+                            break;
+                        case "SXnorB32":
+                            result = _module.AddInstruction(
+                                SpirvOp.Not,
+                                _uintType,
+                                _module.AddInstruction(
+                                    SpirvOp.BitwiseXor,
+                                    _uintType,
+                                    left,
+                                    right));
+                            Store(_scc, IsNotZero(result));
                             break;
                         case "SLshlB32":
                             result = ShiftLeftLogical(left, right);
+                            Store(_scc, IsNotZero(result));
                             break;
                         case "SLshrB32":
                             result = ShiftRightLogical(
                                 left,
                                 BitwiseAnd(right, UInt(31)));
+                            Store(_scc, IsNotZero(result));
                             break;
                         case "SAshrI32":
                             result = ShiftRightArithmetic(left, right);
+                            Store(_scc, IsNotZero(result));
                             break;
                         case "SBfmB32":
                             result = _module.AddInstruction(
@@ -1149,6 +1227,7 @@ internal static partial class Gen5SpirvTranslator
                                     left,
                                     offset,
                                     width);
+                            Store(_scc, IsNotZero(result));
                             break;
                         }
                         case "SCselectB32":
@@ -1161,9 +1240,47 @@ internal static partial class Gen5SpirvTranslator
                             break;
                         case "SMinU32":
                             result = Ext(38, _uintType, left, right);
+                            Store(
+                                _scc,
+                                _module.AddInstruction(
+                                    SpirvOp.ULessThan,
+                                    _boolType,
+                                    left,
+                                    right));
+                            break;
+                        case "SMinI32":
+                            result = Bitcast(
+                                _uintType,
+                                Ext(39, _intType, Bitcast(_intType, left), Bitcast(_intType, right)));
+                            Store(
+                                _scc,
+                                _module.AddInstruction(
+                                    SpirvOp.SLessThan,
+                                    _boolType,
+                                    Bitcast(_intType, left),
+                                    Bitcast(_intType, right)));
                             break;
                         case "SMaxU32":
                             result = Ext(41, _uintType, left, right);
+                            Store(
+                                _scc,
+                                _module.AddInstruction(
+                                    SpirvOp.UGreaterThan,
+                                    _boolType,
+                                    left,
+                                    right));
+                            break;
+                        case "SMaxI32":
+                            result = Bitcast(
+                                _uintType,
+                                Ext(42, _intType, Bitcast(_intType, left), Bitcast(_intType, right)));
+                            Store(
+                                _scc,
+                                _module.AddInstruction(
+                                    SpirvOp.SGreaterThan,
+                                    _boolType,
+                                    Bitcast(_intType, left),
+                                    Bitcast(_intType, right)));
                             break;
                         case "SLshl1AddU32":
                         case "SLshl2AddU32":
@@ -1308,17 +1425,55 @@ internal static partial class Gen5SpirvTranslator
                     "SXorSaveexecB64" => _module.AddInstruction(
                         SpirvOp.BitwiseXor, _ulongType, oldExec, left),
                     "SAndn2SaveexecB64" => _module.AddInstruction(
-                        SpirvOp.BitwiseAnd, _ulongType, oldExec, notLeft),
-                    "SAndn1SaveexecB64" => _module.AddInstruction(
                         SpirvOp.BitwiseAnd,
                         _ulongType,
+                        left,
                         _module.AddInstruction(
                             SpirvOp.Not,
                             _ulongType,
-                            oldExec),
-                        left),
+                            oldExec)),
+                    "SAndn1SaveexecB64" => _module.AddInstruction(
+                        SpirvOp.BitwiseAnd,
+                        _ulongType,
+                        notLeft,
+                        oldExec),
+                    "SOrn1SaveexecB64" => _module.AddInstruction(
+                        SpirvOp.BitwiseOr,
+                        _ulongType,
+                        notLeft,
+                        oldExec),
                     "SOrn2SaveexecB64" => _module.AddInstruction(
-                        SpirvOp.BitwiseOr, _ulongType, oldExec, notLeft),
+                        SpirvOp.BitwiseOr,
+                        _ulongType,
+                        left,
+                        _module.AddInstruction(
+                            SpirvOp.Not,
+                            _ulongType,
+                            oldExec)),
+                    "SNandSaveexecB64" => _module.AddInstruction(
+                        SpirvOp.Not,
+                        _ulongType,
+                        _module.AddInstruction(
+                            SpirvOp.BitwiseAnd,
+                            _ulongType,
+                            left,
+                            oldExec)),
+                    "SNorSaveexecB64" => _module.AddInstruction(
+                        SpirvOp.Not,
+                        _ulongType,
+                        _module.AddInstruction(
+                            SpirvOp.BitwiseOr,
+                            _ulongType,
+                            left,
+                            oldExec)),
+                    "SXnorSaveexecB64" => _module.AddInstruction(
+                        SpirvOp.Not,
+                        _ulongType,
+                        _module.AddInstruction(
+                            SpirvOp.BitwiseXor,
+                            _ulongType,
+                            left,
+                            oldExec)),
                     _ => 0u,
                 };
                 if (newExec == 0)
@@ -1524,6 +1679,22 @@ internal static partial class Gen5SpirvTranslator
             }
 
             StoreS64(destination, value);
+            if (instruction.Opcode is
+                "SNotB64" or
+                "SAndB64" or
+                "SOrB64" or
+                "SXorB64" or
+                "SAndn1B64" or
+                "SAndn2B64" or
+                "SOrn1B64" or
+                "SOrn2B64" or
+                "SNandB64" or
+                "SNorB64" or
+                "SXnorB64")
+            {
+                Store(_scc, IsNotZero64(value));
+            }
+
             return true;
         }
 
@@ -2109,6 +2280,53 @@ internal static partial class Gen5SpirvTranslator
                 _boolType,
                 value,
                 _module.Constant64(_ulongType, 0));
+
+        private uint SignBit(uint value) =>
+            ShiftRightLogical(value, UInt(31));
+
+        private uint SignedAddOverflow(uint left, uint right, uint result)
+        {
+            var leftSign = SignBit(left);
+            var rightSign = SignBit(right);
+            var resultSign = SignBit(result);
+            var sameSourceSign = _module.AddInstruction(
+                SpirvOp.IEqual,
+                _boolType,
+                leftSign,
+                rightSign);
+            var resultSignChanged = _module.AddInstruction(
+                SpirvOp.INotEqual,
+                _boolType,
+                leftSign,
+                resultSign);
+            return _module.AddInstruction(
+                SpirvOp.LogicalAnd,
+                _boolType,
+                sameSourceSign,
+                resultSignChanged);
+        }
+
+        private uint SignedSubOverflow(uint left, uint right, uint result)
+        {
+            var leftSign = SignBit(left);
+            var rightSign = SignBit(right);
+            var resultSign = SignBit(result);
+            var differentSourceSign = _module.AddInstruction(
+                SpirvOp.INotEqual,
+                _boolType,
+                leftSign,
+                rightSign);
+            var resultSignChanged = _module.AddInstruction(
+                SpirvOp.INotEqual,
+                _boolType,
+                leftSign,
+                resultSign);
+            return _module.AddInstruction(
+                SpirvOp.LogicalAnd,
+                _boolType,
+                differentSourceSign,
+                resultSignChanged);
+        }
 
         private static bool TryDecodeInlineConstant(uint encoded, out uint value)
         {

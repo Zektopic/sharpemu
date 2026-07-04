@@ -3493,6 +3493,29 @@ public static class AgcExports
               $"{drawViewport.Width:0.###}x{drawViewport.Height:0.###}:" +
               $"{drawViewport.MinDepth:0.###}-{drawViewport.MaxDepth:0.###}"
             : "full";
+        var rasterRegisters = new (string Name, uint Offset)[]
+        {
+            ("screen_tl", PaScScreenScissorTl),
+            ("screen_br", PaScScreenScissorBr),
+            ("window_off", PaScWindowOffset),
+            ("window_tl", PaScWindowScissorTl),
+            ("window_br", PaScWindowScissorBr),
+            ("generic_tl", PaScGenericScissorTl),
+            ("generic_br", PaScGenericScissorBr),
+            ("vport_tl", PaScVportScissor0Tl),
+            ("vport_br", PaScVportScissor0Br),
+            ("mode", PaScModeCntl0),
+            ("xscale", PaClVportXScale),
+            ("xoffset", PaClVportXOffset),
+            ("yscale", PaClVportYScale),
+            ("yoffset", PaClVportYOffset),
+        };
+        var raster = string.Join(
+            ',',
+            rasterRegisters.Select(entry =>
+                state.CxRegisters.TryGetValue(entry.Offset, out var value)
+                    ? $"{entry.Name}=0x{value:X8}"
+                    : $"{entry.Name}=missing"));
         var blend = draw.RenderState.Blend;
         TraceAgcShader(
             $"agc.shader_draw es=0x{draw.ExportShaderAddress:X16} " +
@@ -3500,6 +3523,7 @@ public static class AgcExports
             $"primitive=0x{draw.PrimitiveType:X} " +
             $"blend={(blend.Enable ? 1 : 0)}:{blend.ColorSrcFactor}/{blend.ColorDstFactor}/{blend.ColorFunc} " +
             $"write_mask=0x{blend.WriteMask:X} scissor={scissor} viewport={viewport} " +
+            $"raster=[{raster}] " +
             $"ps_ena=0x{psInputEna:X8} ps_addr=0x{psInputAddr:X8} " +
             $"targets=[{targets}] textures=[{textures}] " +
             $"buffers=[{buffers}] vertex=[{vertexInputs}] indices=[{indices}]");
