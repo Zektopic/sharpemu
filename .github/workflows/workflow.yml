@@ -99,7 +99,7 @@ jobs:
       - name: Install Windows native GPU dependencies
         shell: pwsh
         run: |
-          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install sdl3:x64-windows vulkan:x64-windows
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install sdl3[vulkan]:x64-windows vulkan:x64-windows
 
           cmake `
             -S src/SharpEmu.Gpu.Vulkan.Native `
@@ -207,7 +207,7 @@ jobs:
             libwayland-dev \
             libxkbcommon-dev \
             pkg-config
-          "$VCPKG_INSTALLATION_ROOT/vcpkg" install sdl3:x64-linux
+          "$VCPKG_INSTALLATION_ROOT/vcpkg" install sdl3[vulkan]:x64-linux
           cmake \
             -S src/SharpEmu.Gpu.Vulkan.Native \
             -B artifacts/native/gpu-vulkan \
