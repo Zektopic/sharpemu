@@ -89,6 +89,11 @@ void cleanup(se_gpu_backend* b) {
     SDL_Quit(); delete b;
 }
 
+se_gpu_result abandon(se_gpu_backend* b, se_gpu_result result, std::string message) {
+    cleanup(b);
+    return fail(nullptr, result, std::move(message));
+}
+
 uint32_t memory_type(se_gpu_backend* b, uint32_t bits, VkMemoryPropertyFlags required) {
     VkPhysicalDeviceMemoryProperties properties{};
     vkGetPhysicalDeviceMemoryProperties(b->physical_device, &properties);
@@ -659,22 +664,25 @@ const char* SE_GPU_CALL se_gpu_last_error(const se_gpu_backend* b) {
     return b ? b->error.c_str() : global_error.c_str();
 }
 se_gpu_result SE_GPU_CALL se_gpu_create(const se_gpu_create_info* info, se_gpu_backend** out) {
-    if (!info || !out || info->struct_size < sizeof(*info) || !info->width || !info->height)
-        return SE_GPU_INVALID_ARGUMENT;
+    if (!info || !out || info->struct_size < sizeof(*info) || !info->width || !info->height) {
+        return fail(nullptr, SE_GPU_INVALID_ARGUMENT, "invalid native GPU create info");
+    }
     *out = nullptr;
-    if (info->abi_version != SE_GPU_ABI_VERSION) return SE_GPU_INCOMPATIBLE_ABI;
+    if (info->abi_version != SE_GPU_ABI_VERSION)
+        return fail(nullptr, SE_GPU_INCOMPATIBLE_ABI, "native GPU ABI version mismatch");
     auto* b = new (std::nothrow) se_gpu_backend{};
-    if (!b) return SE_GPU_OUT_OF_MEMORY;
+    if (!b) return fail(nullptr, SE_GPU_OUT_OF_MEMORY, "native GPU backend allocation failed");
     b->log = info->log; b->log_user = info->log_user;
     // SharpEmu owns the process entry point (and is a WinExe on Windows), so
     // SDL never gets its usual SDL_main bootstrap. Mark the host entry point
     // ready before initializing video from the dedicated renderer thread.
     SDL_SetMainReady();
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD)) { cleanup(b); return fail(nullptr, SE_GPU_PLATFORM_ERROR, SDL_GetError()); }
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD))
+        return abandon(b, SE_GPU_PLATFORM_ERROR, SDL_GetError());
     b->window = SDL_CreateWindow(info->title_utf8 ? info->title_utf8 : "SharpEmu",
         static_cast<int>(info->width), static_cast<int>(info->height), SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
-    if (!b->window) { cleanup(b); return fail(nullptr, SE_GPU_PLATFORM_ERROR, SDL_GetError()); }
-    if (!SDL_ShowWindow(b->window)) { cleanup(b); return fail(nullptr, SE_GPU_PLATFORM_ERROR, SDL_GetError()); }
+    if (!b->window) return abandon(b, SE_GPU_PLATFORM_ERROR, SDL_GetError());
+    if (!SDL_ShowWindow(b->window)) return abandon(b, SE_GPU_PLATFORM_ERROR, SDL_GetError());
     SDL_RaiseWindow(b->window);
     SDL_PumpEvents();
     uint32_t count{}; const char* const* extensions = SDL_Vulkan_GetInstanceExtensions(&count);
@@ -683,12 +691,13 @@ se_gpu_result SE_GPU_CALL se_gpu_create(const se_gpu_create_info* info, se_gpu_b
     VkInstanceCreateInfo create{VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO, nullptr, 0, &app,
         0, nullptr, count, extensions};
     VkResult vr = vkCreateInstance(&create, nullptr, &b->instance);
-    if (vr != VK_SUCCESS) { cleanup(b); return fail(nullptr, SE_GPU_VULKAN_ERROR, "vkCreateInstance failed"); }
+    if (vr != VK_SUCCESS) return abandon(b, SE_GPU_VULKAN_ERROR,
+        "vkCreateInstance failed (VkResult " + std::to_string(vr) + ")");
     if (!SDL_Vulkan_CreateSurface(b->window, b->instance, nullptr, &b->surface)) {
-        cleanup(b); return fail(nullptr, SE_GPU_VULKAN_ERROR, SDL_GetError());
+        return abandon(b, SE_GPU_VULKAN_ERROR, SDL_GetError());
     }
     uint32_t device_count{}; vkEnumeratePhysicalDevices(b->instance, &device_count, nullptr);
-    if (!device_count) { cleanup(b); return fail(nullptr, SE_GPU_VULKAN_ERROR, "no Vulkan device"); }
+    if (!device_count) return abandon(b, SE_GPU_VULKAN_ERROR, "no Vulkan device");
     VkPhysicalDevice devices[16]{}; device_count = device_count > 16 ? 16 : device_count;
     vkEnumeratePhysicalDevices(b->instance, &device_count, devices);
     for (uint32_t d = 0; d < device_count && !b->physical_device; ++d) {
@@ -702,14 +711,15 @@ se_gpu_result SE_GPU_CALL se_gpu_create(const se_gpu_create_info* info, se_gpu_b
             }
         }
     }
-    if (!b->physical_device) { cleanup(b); return fail(nullptr, SE_GPU_VULKAN_ERROR, "no presentation queue"); }
+    if (!b->physical_device) return abandon(b, SE_GPU_VULKAN_ERROR, "no presentation queue");
     float priority = 1; VkDeviceQueueCreateInfo queue{VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
         nullptr, 0, b->queue_family, 1, &priority};
     const char* device_extensions[]{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     VkDeviceCreateInfo device{VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO, nullptr, 0, 1, &queue,
         0, nullptr, 1, device_extensions, nullptr};
     vr = vkCreateDevice(b->physical_device, &device, nullptr, &b->device);
-    if (vr != VK_SUCCESS) { cleanup(b); return fail(nullptr, SE_GPU_VULKAN_ERROR, "vkCreateDevice failed"); }
+    if (vr != VK_SUCCESS) return abandon(b, SE_GPU_VULKAN_ERROR,
+        "vkCreateDevice failed (VkResult " + std::to_string(vr) + ")");
     vkGetDeviceQueue(b->device, b->queue_family, 0, &b->queue);
     se_gpu_result result = create_commands(b);
     if (result == SE_GPU_OK) result = create_swapchain(b);

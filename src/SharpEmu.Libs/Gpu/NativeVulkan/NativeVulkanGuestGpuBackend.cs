@@ -196,7 +196,8 @@ internal sealed unsafe class NativeVulkanGuestGpuBackend : IGuestGpuBackend
                     EnableValidation = Environment.GetEnvironmentVariable("SHARPEMU_VK_VALIDATION") == "1" ? 1u : 0u,
                 };
                 var result = NativeVulkanApi.Create(&info, out backend);
-                if (result != NativeGpuResult.Success) throw new InvalidOperationException(NativeVulkanApi.GetError(0));
+                if (result != NativeGpuResult.Success)
+                    throw new InvalidOperationException($"se_gpu_create failed with {result}: {NativeVulkanApi.GetError(0)}");
             }
             finally { Marshal.FreeCoTaskMem(title); }
             _ready.Set();
