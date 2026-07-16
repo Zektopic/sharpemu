@@ -92,11 +92,11 @@ release includes the MoltenVK Vulkan implementation.
 
 |               Demons Souls Remake                   |                     Dreaming Sarah                         |
 | :-----------------------------------------------------------: | :--------------------------------------------------------------------------------------------: |
-| ![Bloodborne screenshot](./.github/images/demons-souls.jpg) | ![Project DIVA screenshot](./.github/images/dreaming-sarah.jpg) |
+| ![Bloodborne screenshot](./.github/images/demons-souls.jpg) | ![Dreaming Sarah](./.github/images/dreaming-sarah.jpg) |
 
-|                  Void Terrarium                     |                 DRIVECLUB™ by Evolution Studios                    |
+|                  Void Terrarium                     |                 Dead Cells                    |
 | :------------------------------------------------------------------------: | :------------------------------------------------------------------: |
-| ![Yakuza screenshot](./.github/images/void-terrarium.jpg) | ![DRIVECLUB screenshot](./documents/Screenshots/4.png) |
+| ![Void Terrarium](./.github/images/void-terrarium.jpg) | ![Dead Cells](./.github/images/dead-cells.jpg) |
 
 
 > [!IMPORTANT]  
