@@ -421,7 +421,8 @@ public static class KernelEventQueueCompatExports
         }
 
         TraceEventQueue(ctx, "wait-block", handle);
-        GuestThreadBlocking.NoteBlocked(GuestThreadExecution.CurrentGuestThreadHandle, "sceKernelWaitEqueue");
+        var guestThreadHandle = GuestThreadExecution.CurrentGuestThreadHandle;
+        GuestThreadBlocking.NoteBlocked(guestThreadHandle, "sceKernelWaitEqueue");
         try
         {
             lock (_eventQueueGate)
@@ -444,13 +445,14 @@ public static class KernelEventQueueCompatExports
                     var slice = timeoutAddress == 0
                         ? GuestThreadBlocking.WaitSliceMilliseconds
                         : (int)Math.Min(remaining, GuestThreadBlocking.WaitSliceMilliseconds);
+                    GuestThreadBlocking.Checkpoint(guestThreadHandle, _eventQueueGate);
                     _ = Monitor.Wait(_eventQueueGate, slice);
                 }
             }
         }
         finally
         {
-            GuestThreadBlocking.NoteUnblocked(GuestThreadExecution.CurrentGuestThreadHandle);
+            GuestThreadBlocking.NoteUnblocked(guestThreadHandle);
         }
 
         deliveredCount = DequeueEvents(ctx, handle, eventsAddress, eventCapacity);

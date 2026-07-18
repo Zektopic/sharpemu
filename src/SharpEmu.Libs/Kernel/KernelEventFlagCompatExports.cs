@@ -248,8 +248,9 @@ public static class KernelEventFlagCompatExports
             // the predicate is re-evaluated (Set semantics on FreeBSD-style
             // event flags: OR/AND over the bit pattern, optional clear).
             state.WaitingThreads++;
-            if (_traceEventFlag) TraceEventFlag($"wait-block handle=0x{handle:X16} pattern=0x{pattern:X16} waiters={state.WaitingThreads} guest_thread=0x{GuestThreadExecution.CurrentGuestThreadHandle:X16} ret=0x{returnRip:X16}");
-            GuestThreadBlocking.NoteBlocked(GuestThreadExecution.CurrentGuestThreadHandle, "sceKernelWaitEventFlag");
+            var guestThreadHandle = GuestThreadExecution.CurrentGuestThreadHandle;
+            if (_traceEventFlag) TraceEventFlag($"wait-block handle=0x{handle:X16} pattern=0x{pattern:X16} waiters={state.WaitingThreads} guest_thread=0x{guestThreadHandle:X16} ret=0x{returnRip:X16}");
+            GuestThreadBlocking.NoteBlocked(guestThreadHandle, "sceKernelWaitEventFlag");
             try
             {
                 while (true)
@@ -277,13 +278,14 @@ public static class KernelEventFlagCompatExports
                         return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_TIMED_OUT);
                     }
 
+                    GuestThreadBlocking.Checkpoint(guestThreadHandle, state.Gate);
                     _ = Monitor.Wait(state.Gate, (int)Math.Min(remaining, GuestThreadBlocking.WaitSliceMilliseconds));
                 }
             }
             finally
             {
                 state.WaitingThreads = Math.Max(0, state.WaitingThreads - 1);
-                GuestThreadBlocking.NoteUnblocked(GuestThreadExecution.CurrentGuestThreadHandle);
+                GuestThreadBlocking.NoteUnblocked(guestThreadHandle);
             }
         }
     }

@@ -1163,6 +1163,7 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 		BindTlsBase(context);
 		var previousGuestThreadScheduler = GuestThreadExecution.Scheduler;
 		GuestThreadExecution.Scheduler = this;
+		GuestThreadBlocking.DeliverInterruptForCurrentThread = DeliverPendingGuestExceptionInPlaceForCurrentThread;
 		try
 		{
 			if (!SetupImportStubs(importStubs))
@@ -3921,6 +3922,7 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 					handler,
 					exceptionType,
 					external.ExceptionStackBase);
+				GuestThreadBlocking.RequestInterrupt(threadHandle);
 				if (logGuestExceptions)
 				{
 					Console.Error.WriteLine(
@@ -3976,6 +3978,10 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 					handler,
 					exceptionType,
 					exceptionStackBase);
+				// If the target is parked in place inside an HLE wait, it will
+				// not reach the import-return safe point; its sliced wait loop
+				// delivers at the next checkpoint instead.
+				GuestThreadBlocking.RequestInterrupt(threadHandle);
 				if (logGuestExceptions)
 				{
 					Console.Error.WriteLine(
@@ -4216,6 +4222,35 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 		}
 
 		return 0;
+	}
+
+	// Runs on a parked guest thread's own host thread from a wait-loop
+	// checkpoint (GuestThreadBlocking.Checkpoint). A thread blocked in place
+	// keeps its executor busy and never reaches the import-return safe point,
+	// so queued exceptions (IL2CPP stop-the-world suspends) are delivered here
+	// instead — same deliverer, same native-thread identity/TLS the handler
+	// registered. The default continuation makes the exception context fall
+	// back to the live import-entry registers, which are the interrupted state.
+	private void DeliverPendingGuestExceptionInPlaceForCurrentThread()
+	{
+		var threadHandle = GuestThreadExecution.CurrentGuestThreadHandle;
+		CpuContext? context = null;
+		if (threadHandle != 0)
+		{
+			lock (_guestThreadGate)
+			{
+				if (_guestThreads.TryGetValue(threadHandle, out var thread))
+				{
+					context = thread.Context;
+				}
+			}
+		}
+
+		context ??= _cpuContext;
+		if (context is not null)
+		{
+			DeliverPendingGuestExceptionAtSafePoint(context, default);
+		}
 	}
 
 	private void DeliverPendingGuestExceptionAtSafePoint(

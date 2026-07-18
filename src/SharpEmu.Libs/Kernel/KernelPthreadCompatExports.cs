@@ -703,6 +703,7 @@ public static class KernelPthreadCompatExports
                         return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_TRY_AGAIN;
                     }
 
+                    GuestThreadBlocking.Checkpoint(currentThreadId, state);
                     _ = Monitor.Wait(state, GuestThreadBlocking.WaitSliceMilliseconds);
                 }
 
@@ -1280,6 +1281,7 @@ public static class KernelPthreadCompatExports
                         remaining = TimeSpan.FromMilliseconds(GuestThreadBlocking.WaitSliceMilliseconds);
                     }
 
+                    GuestThreadBlocking.Checkpoint(currentThreadId, state.SyncRoot);
                     _ = Monitor.Wait(state.SyncRoot, remaining);
                 }
             }

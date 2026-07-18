@@ -127,7 +127,8 @@ public static class KernelSemaphoreCompatExports
                     TraceSemaphore($"wait-block handle=0x{handle:X8} name='{semaphore.Name}' need={needCount} count={semaphore.Count} timeout={(timeoutAddress == 0 ? "infinite" : timeoutUsec)} waiters={semaphore.WaitingThreads} {FormatCallSite(ctx)}");
                 }
 
-                GuestThreadBlocking.NoteBlocked(GuestThreadExecution.CurrentGuestThreadHandle, "sceKernelWaitSema");
+                var guestThreadHandle = GuestThreadExecution.CurrentGuestThreadHandle;
+                GuestThreadBlocking.NoteBlocked(guestThreadHandle, "sceKernelWaitSema");
                 try
                 {
                     while (semaphore.Count < needCount)
@@ -154,13 +155,14 @@ public static class KernelSemaphoreCompatExports
                             return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_ERROR_TIMED_OUT);
                         }
 
+                        GuestThreadBlocking.Checkpoint(guestThreadHandle, semaphore.Gate);
                         _ = Monitor.Wait(semaphore.Gate, (int)Math.Min(remaining, GuestThreadBlocking.WaitSliceMilliseconds));
                     }
                 }
                 finally
                 {
                     semaphore.WaitingThreads = Math.Max(0, semaphore.WaitingThreads - 1);
-                    GuestThreadBlocking.NoteUnblocked(GuestThreadExecution.CurrentGuestThreadHandle);
+                    GuestThreadBlocking.NoteUnblocked(guestThreadHandle);
                 }
             }
 
