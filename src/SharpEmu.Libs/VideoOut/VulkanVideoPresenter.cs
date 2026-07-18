@@ -1667,6 +1667,32 @@ internal static unsafe class VulkanVideoPresenter
         }
     }
 
+    internal static ulong GetGuestImageByteCount(uint format, uint width, uint height)
+    {
+        var blockBytes = format switch
+        {
+            169 or 170 or 175 or 176 => 8UL,
+            171 or 172 or 173 or 174 or
+            177 or 178 or 179 or 180 or 181 or 182 => 16UL,
+            _ => 0UL,
+        };
+        if (blockBytes != 0)
+        {
+            return checked(((ulong)width + 3) / 4 * (((ulong)height + 3) / 4) * blockBytes);
+        }
+
+        var bytesPerPixel = format switch
+        {
+            1 => 1UL,
+            2 or 3 or 16 or 17 or 19 => 2UL,
+            11 or 12 => 8UL,
+            13 => 12UL,
+            14 => 16UL,
+            _ => 4UL,
+        };
+        return checked((ulong)width * height * bytesPerPixel);
+    }
+
     private static byte[]? TakeGuestImageInitialData(ulong address)
     {
         lock (_gate)
@@ -2811,6 +2837,8 @@ internal static unsafe class VulkanVideoPresenter
         private readonly HashSet<(ulong Address, uint Width, uint Height, Format Format)> _tracedTextureUploads = new();
         private readonly HashSet<(ulong Address, uint Width, uint Height, uint Format)> _dumpedTextures = new();
         private readonly HashSet<(ulong Address, uint Width, uint Height, uint Format)> _tracedTextureUploadContents = new();
+        private readonly HashSet<(ulong Address, int ActualSize, ulong ExpectedSize, Format Format)>
+            _rejectedGuestImageUploads = new();
         private readonly HashSet<(ulong Address, int Size)> _tracedGlobalBuffers = new();
         private readonly HashSet<(ulong Address, ulong Size)> _tracedGlobalWritebacks = new();
         private readonly HashSet<(ulong Shader, uint X, uint Y, uint Z, string Reason)>
@@ -5583,7 +5611,20 @@ internal static unsafe class VulkanVideoPresenter
                 DependencyCount = 1,
                 PDependencies = &dependency,
             };
-            Check(_vk.CreateRenderPass(_device, &renderPassInfo, null, out _renderPass), "vkCreateRenderPass");
+            Check(
+                _vk.CreateRenderPass(
+                    _device,
+                    &renderPassInfo,
+                    null,
+                    out var swapchainRenderPass),
+                "vkCreateRenderPass");
+            if (swapchainRenderPass.Handle == 0)
+            {
+                throw new InvalidOperationException(
+                    "vkCreateRenderPass returned a null swapchain render pass");
+            }
+
+            _renderPass = swapchainRenderPass;
 
             _swapchainImageViews = new ImageView[_swapchainImages.Length];
             _framebuffers = new Framebuffer[_swapchainImages.Length];
@@ -5610,7 +5651,7 @@ internal static unsafe class VulkanVideoPresenter
                 var framebufferInfo = new FramebufferCreateInfo
                 {
                     SType = StructureType.FramebufferCreateInfo,
-                    RenderPass = _renderPass,
+                    RenderPass = swapchainRenderPass,
                     AttachmentCount = 1,
                     PAttachments = &imageView,
                     Width = _extent.Width,
@@ -8221,22 +8262,25 @@ internal static unsafe class VulkanVideoPresenter
             var shadow = allocation.Shadow.AsSpan(checked((int)guestOffset), guestBuffer.Length);
             if (!source.SequenceEqual(shadow))
             {
+                var sharedReadOnly = string.Equals(
+                    allocation.QueueName,
+                    SharedReadOnlyGuestBufferQueue,
+                    StringComparison.Ordinal);
+                if (sharedReadOnly &&
+                    (allocation.LastUseTimeline > _completedTimeline ||
+                     IsGuestBufferAllocationReferencedByOpenBatch(allocation)))
+                {
+                    return CreateVersionedReadOnlyGlobalBufferResource(
+                        guestBuffer,
+                        expectedBias,
+                        size);
+                }
+
                 // HOST_COHERENT does not permit racing a mapped CPU write with
                 // an in-flight shader access. Retire prior users, publish their
                 // dirty ranges to guest memory, then upload the current guest
                 // bytes (which may be newer than the parser's captured array).
-                if (string.Equals(
-                        allocation.QueueName,
-                        SharedReadOnlyGuestBufferQueue,
-                        StringComparison.Ordinal))
-                {
-                    // Shared read-only storage can still be referenced by any
-                    // logical guest queue, so replacing its mapped contents
-                    // requires retiring every prior reader.
-                    WaitForAllGuestSubmissionsForCpuVisibility();
-                    WriteBackAllDirtyGuestBuffers();
-                }
-                else
+                if (!sharedReadOnly)
                 {
                     // Writable aliases are private to one logical guest queue.
                     // Retiring unrelated queues here recreates the global FIFO
@@ -8285,6 +8329,72 @@ internal static unsafe class VulkanVideoPresenter
                 GuestSize = size,
                 Allocation = allocation,
             };
+        }
+
+        private bool IsGuestBufferAllocationReferencedByOpenBatch(
+            GuestBufferAllocation allocation)
+        {
+            if (!_batchOpen)
+            {
+                return false;
+            }
+
+            foreach (var resources in _batchResources)
+            {
+                foreach (var globalBuffer in resources.GlobalMemoryBuffers)
+                {
+                    if (ReferenceEquals(globalBuffer?.Allocation, allocation))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private GlobalBufferResource CreateVersionedReadOnlyGlobalBufferResource(
+            GuestMemoryBuffer guestBuffer,
+            ulong byteBias,
+            ulong guestSize)
+        {
+            var descriptorSize = checked((guestSize + byteBias + 3) & ~3UL);
+            var descriptorLength = checked((int)descriptorSize);
+            var snapshot = GuestDataPool.Rent(descriptorLength);
+            try
+            {
+                var snapshotData = snapshot.AsSpan(0, descriptorLength);
+                snapshotData.Clear();
+                guestBuffer.Data.AsSpan(0, guestBuffer.Length).CopyTo(
+                    snapshotData[checked((int)byteBias)..]);
+
+                var buffer = CreateHostBuffer(
+                    snapshotData,
+                    BufferUsageFlags.StorageBufferBit,
+                    out var memory,
+                    out var mapped);
+                return new GlobalBufferResource
+                {
+                    BaseAddress = guestBuffer.BaseAddress,
+                    Writable = false,
+                    WriteBackToGuest = false,
+                    Buffer = buffer,
+                    Memory = memory,
+                    Mapped = mapped + checked((nint)byteBias),
+                    Offset = 0,
+                    Size = descriptorSize,
+                    GuestOffset = byteBias,
+                    GuestSize = guestSize,
+                };
+            }
+            finally
+            {
+                GuestDataPool.Return(snapshot);
+                if (guestBuffer.Pooled)
+                {
+                    GuestDataPool.Return(guestBuffer.Data);
+                }
+            }
         }
 
         private GlobalBufferResource CreateTransientGlobalBufferResource(
@@ -9029,23 +9139,59 @@ internal static unsafe class VulkanVideoPresenter
                 12 => 8UL,
                 13 => 12UL,
                 14 => 16UL,
+                16 => 2UL,
+                17 => 2UL,
+                19 => 2UL,
                 _ => 4UL,
             };
 
         private static ulong GetTextureByteCount(uint format, uint width, uint height)
+            => GetGuestImageByteCount(format, width, height);
+
+        private static ulong GetVulkanImageByteCount(Format format, uint width, uint height)
         {
             var blockBytes = format switch
             {
-                // BC1 (169/170) and BC4 (175/176) are 8 bytes per 4x4 block;
-                // BC2/BC3/BC5/BC6H/BC7 are 16 bytes per block.
-                169 or 170 or 175 or 176 => 8UL,
-                171 or 172 or 173 or 174 or
-                177 or 178 or 179 or 180 or 181 or 182 => 16UL,
+                Format.BC1RgbUnormBlock or
+                Format.BC1RgbSrgbBlock or
+                Format.BC1RgbaUnormBlock or
+                Format.BC1RgbaSrgbBlock or
+                Format.BC4UnormBlock or
+                Format.BC4SNormBlock => 8UL,
+                Format.BC2UnormBlock or
+                Format.BC2SrgbBlock or
+                Format.BC3UnormBlock or
+                Format.BC3SrgbBlock or
+                Format.BC5UnormBlock or
+                Format.BC5SNormBlock or
+                Format.BC6HUfloatBlock or
+                Format.BC6HSfloatBlock or
+                Format.BC7UnormBlock or
+                Format.BC7SrgbBlock => 16UL,
                 _ => 0UL,
             };
-            return blockBytes == 0
-                ? checked((ulong)width * height * GetTextureBytesPerPixel(format))
-                : checked(((ulong)width + 3) / 4 * (((ulong)height + 3) / 4) * blockBytes);
+            if (blockBytes != 0)
+            {
+                return checked(((ulong)width + 3) / 4 * (((ulong)height + 3) / 4) * blockBytes);
+            }
+
+            var bitsPerTexel = GetFormatCompatibilityClass(format);
+            if (bitsPerTexel == 0)
+            {
+                bitsPerTexel = format switch
+                {
+                    Format.B5G6R5UnormPack16 or
+                    Format.R5G5B5A1UnormPack16 or
+                    Format.R4G4B4A4UnormPack16 => 16,
+                    Format.B8G8R8A8Unorm or
+                    Format.B8G8R8A8Srgb => 32,
+                    _ => 0,
+                };
+            }
+
+            return bitsPerTexel == 0
+                ? 0
+                : checked((ulong)width * height * bitsPerTexel / 8);
         }
 
         private bool SupportsColorAttachment(Format format)
@@ -10184,7 +10330,10 @@ internal static unsafe class VulkanVideoPresenter
                     TakeGuestImageInitialData(work.Targets[index].Address) is { } initialData &&
                     !targets[index].Initialized &&
                     (ulong)initialData.Length ==
-                        (ulong)targets[index].Width * targets[index].Height * 4)
+                        GetTextureByteCount(
+                            targetDescriptor.Format,
+                            targets[index].Width,
+                            targets[index].Height))
                 {
                     UploadGuestImageInitialData(targets[index], initialData);
                 }
@@ -10733,7 +10882,31 @@ internal static unsafe class VulkanVideoPresenter
 
         private void UploadGuestImageInitialData(GuestImageResource target, byte[] pixels)
         {
-            var byteCount = (ulong)pixels.Length;
+            var guestDataFormat = (target.GuestFormat & 0x8000_0000u) != 0
+                ? (target.GuestFormat >> 8) & 0x1FFu
+                : 0;
+            var uploadPixels = guestDataFormat == 13
+                ? ExpandRgb32Pixels(pixels)
+                : pixels;
+            var expectedByteCount = GetVulkanImageByteCount(
+                target.Format,
+                target.Width,
+                target.Height);
+            if (expectedByteCount == 0 || (ulong)uploadPixels.Length != expectedByteCount)
+            {
+                if (_rejectedGuestImageUploads.Add(
+                        (target.Address, uploadPixels.Length, expectedByteCount, target.Format)))
+                {
+                    Console.Error.WriteLine(
+                        $"[LOADER][WARN] Vulkan rejected incompatible guest image upload " +
+                        $"addr=0x{target.Address:X16} size={target.Width}x{target.Height} " +
+                        $"format={target.Format} bytes={uploadPixels.Length} expected={expectedByteCount}");
+                }
+
+                return;
+            }
+
+            var byteCount = (ulong)uploadPixels.Length;
             var staging = CreateBuffer(
                 byteCount,
                 BufferUsageFlags.TransferSrcBit,
@@ -10745,9 +10918,13 @@ internal static unsafe class VulkanVideoPresenter
                 Check(
                     _vk.MapMemory(_device, stagingMemory, 0, byteCount, 0, &mapped),
                     "vkMapMemory(guest image init)");
-                fixed (byte* source = pixels)
+                fixed (byte* source = uploadPixels)
                 {
-                    System.Buffer.MemoryCopy(source, mapped, pixels.Length, pixels.Length);
+                    System.Buffer.MemoryCopy(
+                        source,
+                        mapped,
+                        uploadPixels.Length,
+                        uploadPixels.Length);
                 }
 
                 _vk.UnmapMemory(_device, stagingMemory);

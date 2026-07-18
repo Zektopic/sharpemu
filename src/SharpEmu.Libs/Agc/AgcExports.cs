@@ -7920,7 +7920,10 @@ public static partial class AgcExports
             return;
         }
 
-        var byteCount = (ulong)target.Width * target.Height * 4;
+        var byteCount = VulkanVideoPresenter.GetGuestImageByteCount(
+            target.Format,
+            target.Width,
+            target.Height);
         if (byteCount == 0 || byteCount > MaxPresentedTextureBytes)
         {
             return;
