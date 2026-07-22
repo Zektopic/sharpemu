@@ -2878,6 +2878,7 @@ internal static unsafe class VulkanVideoPresenter
             _guestImageVariants = new();
         private readonly Dictionary<long, GuestImageResource> _guestImageVersions = new();
         private readonly HashSet<long> _capturedGuestFlipVersions = [];
+        private readonly List<long> _abandonedGuestImageVersions = new();
         private readonly record struct GuestDepthKey(
             ulong Address,
             ulong ReadAddress,
@@ -5624,6 +5625,8 @@ internal static unsafe class VulkanVideoPresenter
                 return;
             }
 
+            _abandonedGuestImageVersions.Clear();
+
             HashSet<long> referencedVersions;
             lock (_gate)
             {
@@ -5637,21 +5640,27 @@ internal static unsafe class VulkanVideoPresenter
                 }
             }
 
-            foreach (var entry in _guestImageVersions.ToArray())
+            foreach (var entry in _guestImageVersions)
             {
-                if (referencedVersions.Contains(entry.Key))
+                if (!referencedVersions.Contains(entry.Key))
                 {
-                    continue;
+                    _abandonedGuestImageVersions.Add(entry.Key);
                 }
+            }
 
-                _guestImageVersions.Remove(entry.Key);
-                _capturedGuestFlipVersions.Remove(entry.Key);
+            foreach (var version in _abandonedGuestImageVersions)
+            {
+                var resource = _guestImageVersions[version];
+                _guestImageVersions.Remove(version);
+                _capturedGuestFlipVersions.Remove(version);
                 _deferredGuestImageVersionDestroys.Enqueue(
-                    (entry.Value, _submitTimeline));
+                    (resource, _submitTimeline));
                 TraceVulkanShader(
-                    $"vk.flip_retire_deferred version={entry.Key} " +
+                    $"vk.flip_retire_deferred version={version} " +
                     $"timeline={_submitTimeline} reason=presentation-dropped");
             }
+
+            _abandonedGuestImageVersions.Clear();
         }
 
         // Used on teardown paths that already drained the queue (device
