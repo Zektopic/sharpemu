@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2026 SharpEmu Emulator Project
+// Copyright (C) 2026 SharpEmu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 using SharpEmu.HLE;
@@ -7600,24 +7600,40 @@ public static partial class KernelMemoryCompatExports
 
         // The terminator counts as part of the scanned range, so strchr(s, '\0')
         // returns a pointer to the string's null byte just like a native libc.
-        Span<byte> current = stackalloc byte[1];
-        for (ulong index = 0; index < 1_048_576; index++)
+        // OPTIMIZATION: Read in chunks to minimize VirtualMemory lookups and lock contention.
+        const int maxChunkSize = 4096;
+        Span<byte> chunk = stackalloc byte[maxChunkSize];
+        ulong offset = 0;
+        ulong limit = 1_048_576;
+
+        while (offset < limit)
         {
-            if (!TryReadCompat(ctx, address + index, current))
+            var currentAddress = address + offset;
+            var remainingInPage = (int)(maxChunkSize - (currentAddress & (maxChunkSize - 1)));
+            var readLength = (int)Math.Min((long)(limit - offset), (long)remainingInPage);
+            var slice = chunk[..readLength];
+
+            if (!TryReadCompat(ctx, currentAddress, slice))
             {
                 return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT;
             }
 
-            if (current[0] == needle)
+            var nullIndex = slice.IndexOf((byte)0);
+            var searchLimit = nullIndex >= 0 ? nullIndex + 1 : readLength; // include null char in search
+
+            var matchIndex = slice[..searchLimit].IndexOf(needle);
+            if (matchIndex >= 0)
             {
-                ctx[CpuRegister.Rax] = address + index;
+                ctx[CpuRegister.Rax] = currentAddress + (ulong)matchIndex;
                 return (int)OrbisGen2Result.ORBIS_GEN2_OK;
             }
 
-            if (current[0] == 0)
+            if (nullIndex >= 0)
             {
                 break;
             }
+
+            offset += (ulong)readLength;
         }
 
         ctx[CpuRegister.Rax] = 0;
@@ -7640,24 +7656,40 @@ public static partial class KernelMemoryCompatExports
 
         ulong match = 0;
         var found = false;
-        Span<byte> current = stackalloc byte[1];
-        for (ulong index = 0; index < 1_048_576; index++)
+        // OPTIMIZATION: Read in chunks to minimize VirtualMemory lookups and lock contention.
+        const int maxChunkSize = 4096;
+        Span<byte> chunk = stackalloc byte[maxChunkSize];
+        ulong offset = 0;
+        ulong limit = 1_048_576;
+
+        while (offset < limit)
         {
-            if (!TryReadCompat(ctx, address + index, current))
+            var currentAddress = address + offset;
+            var remainingInPage = (int)(maxChunkSize - (currentAddress & (maxChunkSize - 1)));
+            var readLength = (int)Math.Min((long)(limit - offset), (long)remainingInPage);
+            var slice = chunk[..readLength];
+
+            if (!TryReadCompat(ctx, currentAddress, slice))
             {
                 return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT;
             }
 
-            if (current[0] == needle)
+            var nullIndex = slice.IndexOf((byte)0);
+            var searchLimit = nullIndex >= 0 ? nullIndex + 1 : readLength;
+
+            var matchIndex = slice[..searchLimit].LastIndexOf(needle);
+            if (matchIndex >= 0)
             {
-                match = address + index;
+                match = currentAddress + (ulong)matchIndex;
                 found = true;
             }
 
-            if (current[0] == 0)
+            if (nullIndex >= 0)
             {
                 break;
             }
+
+            offset += (ulong)readLength;
         }
 
         ctx[CpuRegister.Rax] = found ? match : 0;
@@ -7675,19 +7707,31 @@ public static partial class KernelMemoryCompatExports
         var needle = unchecked((byte)ctx[CpuRegister.Rsi]);
         var count = ctx[CpuRegister.Rdx];
 
-        Span<byte> current = stackalloc byte[1];
-        for (ulong index = 0; index < count; index++)
+        // OPTIMIZATION: Read in chunks to minimize VirtualMemory lookups and lock contention.
+        const int maxChunkSize = 4096;
+        Span<byte> chunk = stackalloc byte[maxChunkSize];
+        ulong offset = 0;
+
+        while (offset < count)
         {
-            if (!TryReadCompat(ctx, address + index, current))
+            var currentAddress = address + offset;
+            var remainingInPage = (int)(maxChunkSize - (currentAddress & (maxChunkSize - 1)));
+            var readLength = (int)Math.Min(count - offset, (ulong)remainingInPage);
+            var slice = chunk[..readLength];
+
+            if (!TryReadCompat(ctx, currentAddress, slice))
             {
                 return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT;
             }
 
-            if (current[0] == needle)
+            var matchIndex = slice.IndexOf(needle);
+            if (matchIndex >= 0)
             {
-                ctx[CpuRegister.Rax] = address + index;
+                ctx[CpuRegister.Rax] = currentAddress + (ulong)matchIndex;
                 return (int)OrbisGen2Result.ORBIS_GEN2_OK;
             }
+
+            offset += (ulong)readLength;
         }
 
         ctx[CpuRegister.Rax] = 0;
