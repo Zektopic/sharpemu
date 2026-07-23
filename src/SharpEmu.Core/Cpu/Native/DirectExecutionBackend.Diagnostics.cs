@@ -179,7 +179,7 @@ public sealed partial class DirectExecutionBackend
 		{
 			Console.Error.WriteLine(
 				$"[LOADER][TRACE] Import#{dispatchIndex} pre-return bytes @0x{returnRip - preludeSize:X16}: " +
-				BitConverter.ToString(prelude.ToArray()).Replace("-", " "));
+				FormatHexBytes(prelude));
 
 			List<DecodedInst>? bestCallChain = null;
 			var preludeAddress = returnRip - preludeSize;
@@ -220,11 +220,17 @@ public sealed partial class DirectExecutionBackend
 		Span<byte> destination = stackalloc byte[128];
 		if (!cpuContext.Memory.TryRead(returnRip, destination))
 		{
-			Log.Debug($"Import#{dispatchIndex} return-rip probe: unreadable @0x{returnRip:X16}");
+			if (Log.IsEnabled(LogLevel.Debug))
+			{
+				Log.Debug($"Import#{dispatchIndex} return-rip probe: unreadable @0x{returnRip:X16}");
+			}
 			return;
 		}
-		string value = BitConverter.ToString(destination.ToArray()).Replace("-", " ");
-		Log.Debug($"Import#{dispatchIndex} return-rip bytes @0x{returnRip:X16}: {value}");
+		if (Log.IsEnabled(LogLevel.Debug))
+		{
+			string value = FormatHexBytes(destination);
+			Log.Debug($"Import#{dispatchIndex} return-rip bytes @0x{returnRip:X16}: {value}");
+		}
 		if (destination[0] == byte.MaxValue && (destination[1] == 21 || destination[1] == 37))
 		{
 			int num = BitConverter.ToInt32(destination.Slice(2, 4));
@@ -291,9 +297,12 @@ public sealed partial class DirectExecutionBackend
 
 			if (cpuContext.Memory.TryRead(target, targetBytes))
 			{
-				Log.Debug(
-					$"Import#{dispatchIndex} near-call target bytes @0x{target:X16}: " +
-					BitConverter.ToString(targetBytes.ToArray()).Replace("-", " "));
+				if (Log.IsEnabled(LogLevel.Debug))
+				{
+					Log.Debug(
+						$"Import#{dispatchIndex} near-call target bytes @0x{target:X16}: " +
+						FormatHexBytes(targetBytes));
+				}
 				if (targetBytes[0] == 0xFF && targetBytes[1] == 0x25)
 				{
 					int slotRel32 = BitConverter.ToInt32(targetBytes.Slice(2, 4));
@@ -325,6 +334,36 @@ public sealed partial class DirectExecutionBackend
 					}
 				}
 			}
+		}
+	}
+
+	private unsafe static string FormatHexBytes(ReadOnlySpan<byte> bytes)
+	{
+		if (bytes.Length == 0) return string.Empty;
+
+		fixed (byte* ptr = &MemoryMarshal.GetReference(bytes))
+		{
+			var ptrCopy = (IntPtr)ptr;
+			int length = bytes.Length;
+			return string.Create(length * 3 - 1, (ptrCopy, length), (span, state) =>
+			{
+				var (p, len) = state;
+				var readSpan = new ReadOnlySpan<byte>((void*)p, len);
+				for (int i = 0; i < readSpan.Length; i++)
+				{
+					byte b = readSpan[i];
+					int highNibble = b >> 4;
+					int lowNibble = b & 0x0F;
+
+					span[i * 3] = (char)(highNibble < 10 ? highNibble + '0' : highNibble - 10 + 'A');
+					span[i * 3 + 1] = (char)(lowNibble < 10 ? lowNibble + '0' : lowNibble - 10 + 'A');
+
+					if (i < readSpan.Length - 1)
+					{
+						span[i * 3 + 2] = ' ';
+					}
+				}
+			});
 		}
 	}
 
