@@ -4,6 +4,7 @@
 using SharpEmu.HLE;
 using System.Buffers;
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Numerics;
 
@@ -35,6 +36,14 @@ public static class Gen5ShaderScalarEvaluator
             StringComparison.Ordinal);
     private static readonly object _scalarFallbackTraceGate = new();
     private static readonly HashSet<(ulong Shader, uint Pc)> _tracedScalarFallbacks = [];
+    // Shaders whose empty SRT/EUD caused a null-base scalar pointer load.
+    // Host submit of those translations has lost the Vulkan device; Agc skips
+    // them before QueueSubmit.
+    private static readonly ConcurrentDictionary<ulong, byte> _emptySrtScalarPointerFallbacks =
+        new();
+
+    public static bool WasEmptySrtScalarPointerFallback(ulong shaderAddress) =>
+        _emptySrtScalarPointerFallbacks.ContainsKey(shaderAddress);
 
     // Uniform forward branches select material/resource bodies that remain
     // statically present in the translated shader. Discover the skipped body's
@@ -349,7 +358,10 @@ public static class Gen5ShaderScalarEvaluator
                 if (globalMemory.ScalarAddress >= ScalarRegisterCount - 1)
                 {
                     error =
-                        $"global-address-register-range pc=0x{instruction.Pc:X} " +
+                        $"{(globalMemory.UsesFlatAddress
+                            ? "flat-address-base-unresolved"
+                            : "global-address-register-range")} " +
+                        $"pc=0x{instruction.Pc:X} " +
                         $"s{globalMemory.ScalarAddress}";
                     return false;
                 }
@@ -364,11 +376,18 @@ public static class Gen5ShaderScalarEvaluator
                 }
 
                 var key = (globalMemory.ScalarAddress, baseAddress);
-                var writable = instruction.Opcode.StartsWith(
+                var writable =
+                    instruction.Opcode.StartsWith(
                         "GlobalStore",
                         StringComparison.Ordinal) ||
                     instruction.Opcode.StartsWith(
                         "GlobalAtomic",
+                        StringComparison.Ordinal) ||
+                    instruction.Opcode.StartsWith(
+                        "FlatStore",
+                        StringComparison.Ordinal) ||
+                    instruction.Opcode.StartsWith(
+                        "FlatAtomic",
                         StringComparison.Ordinal);
                 if (globalMemoryByAddress.TryGetValue(key, out var existingBinding))
                 {
@@ -2101,6 +2120,15 @@ public static class Gen5ShaderScalarEvaluator
             $"dynamic={dynamicOffset} definitions=[{string.Join(';', definitions)}] " +
             $"user_data=[{userData}] metadata=" +
             $"{(state.Metadata is null ? "missing" : $"srt={state.Metadata.ShaderResourceTableSizeDwords},eud={state.Metadata.ExtendedUserDataSizeDwords}")}");
+        if (baseAddress == 0 &&
+            state.Metadata is
+            {
+                ShaderResourceTableSizeDwords: 0,
+                ExtendedUserDataSizeDwords: 0,
+            })
+        {
+            _emptySrtScalarPointerFallbacks.TryAdd(state.Program.Address, 0);
+        }
     }
 
     [Conditional("DEBUG")]

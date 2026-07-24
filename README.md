@@ -25,6 +25,14 @@ SPDX-License-Identifier: GPL-2.0-or-later
 
 ---
 
+<p align="center">
+  <a href="#support">
+    <img src="https://img.shields.io/badge/Support-GitHub%20Sponsors%20%26%20Crypto-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Support SharpEmu">
+  </a>
+</p>
+
+---
+
 > [!NOTE]  
 > SharpEmu supports Windows x64, Linux x64, and macOS x64. Apple Silicon Macs
 > can run the macOS x64 build through Rosetta 2, and Windows on ARM devices
@@ -108,17 +116,10 @@ release includes the MoltenVK Vulkan implementation.
 ## Build
 
 1. Install the .NET SDK version specified in [`global.json`](./global.json).
-2. `dotnet publish` also builds the Bink 2 bridge
-   (`native/bink2-bridge/sharpemu_bink2_bridge.c`) from source, so also
-   install:
-   * **Windows:** [CMake](https://cmake.org/download/), [Ninja](https://github.com/ninja-build/ninja/releases), and [LLVM](https://github.com/llvm/llvm-project/releases) (for `clang-cl`)
-   * **Linux/macOS:** CMake and a C compiler toolchain (e.g. `build-essential` on Linux, Xcode Command Line Tools on macOS)
-
-   `dotnet build` alone doesn't need these; it skips the bridge.
-3. Clone the repository: `git clone https://github.com/sharpemu/sharpemu.git`
-4. Open the solution file (`SharpEmu.slnx`) in **VSCode**.
-5. Build the project: `dotnet build` or `dotnet publish`
-6. Build artifacts will be located in the `artifacts` directory.
+2. Clone the repository: `git clone https://github.com/sharpemu/sharpemu.git`
+3. Open the solution file (`SharpEmu.slnx`) in **VSCode**.
+4. Build the project: `dotnet build` or `dotnet publish`
+5. Build artifacts will be located in the `artifacts` directory.
 
 ## Disclaimer
 
@@ -142,6 +143,18 @@ Provided valuable references for filesystem handling and low-level C# implementa
 # License
 
 - [**GPL-2.0 license**](https://github.com/sharpemu/sharpemu/blob/main/LICENSE)
+
+## Support
+
+Support SharpEmu via GitHub Sponsors or cryptocurrency. Every contribution helps fund ongoing development and long-term maintenance. GitHub Sponsors is the preferred way to support the project, but cryptocurrency donations are also appreciated.
+
+### ETH/USDT
+
+`0xF315F5d986c790bB3A58DbE60F1B2760997dEd82`
+
+### BTC
+
+`bc1qmr9k8899njys5ny63xsues4jgmkk96erslrkmv`
 
 ## Contributing
 
