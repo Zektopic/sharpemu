@@ -23,7 +23,7 @@ internal static class GuestDataPool
 
     public static void Trim() => ((BoundedByteArrayPool)Shared).Trim();
 
-    private sealed class BoundedByteArrayPool : ArrayPool<byte>
+    internal sealed class BoundedByteArrayPool : ArrayPool<byte>
     {
         private readonly object _gate = new();
         private readonly int _maxArrayLength;
@@ -33,6 +33,33 @@ internal static class GuestDataPool
         private readonly HashSet<byte[]> _leases =
             new(System.Collections.Generic.ReferenceEqualityComparer.Instance);
         private ulong _cachedBytes;
+
+        internal ulong CachedBytes
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _cachedBytes;
+                }
+            }
+        }
+
+        internal int CachedArraysCount
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    int count = 0;
+                    foreach (var bucket in _cachedByBucket.Values)
+                    {
+                        count += bucket.Count;
+                    }
+                    return count;
+                }
+            }
+        }
 
         public BoundedByteArrayPool(
             int maxArrayLength,
