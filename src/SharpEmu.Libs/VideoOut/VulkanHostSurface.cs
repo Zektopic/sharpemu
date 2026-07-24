@@ -258,13 +258,20 @@ public static class VulkanVideoHost
         remove => VulkanVideoPresenter.FirstHostFramePresented -= value;
     }
 
-    public static bool TryAttachSurface(VulkanHostSurface surface) =>
-        VulkanVideoPresenter.TryAttachHostSurface(surface);
+    public static bool TryAttachSurface(VulkanHostSurface surface)
+    {
+        return VulkanVideoPresenter.TryAttachHostSurface(surface);
+    }
 
-    public static void DetachSurface(VulkanHostSurface surface) =>
+    public static void DetachSurface(VulkanHostSurface surface)
+    {
         VulkanVideoPresenter.DetachHostSurface(surface);
+    }
 
-    public static void RequestClose() => VulkanVideoPresenter.RequestClose();
+    public static void RequestClose()
+    {
+        VulkanVideoPresenter.RequestClose();
+    }
 
     public static bool IsEmbedded => VulkanVideoPresenter.UsesHostSurface;
 }
