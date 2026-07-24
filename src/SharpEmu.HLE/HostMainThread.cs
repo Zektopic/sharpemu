@@ -24,11 +24,16 @@ public static class HostMainThread
     /// long-running posted work item (the presenter's window loop) can be
     /// asked to return to the pump.
     /// </summary>
-    public static void SetShutdownRequestHandler(Action handler) =>
+    public static void SetShutdownRequestHandler(Action handler)
+    {
         _shutdownRequestHandler = handler;
+    }
 
     /// <summary>Marks the pump as present. Call before guest code can run.</summary>
-    public static void Enable() => IsAvailable = true;
+    public static void Enable()
+    {
+        IsAvailable = true;
+    }
 
     public static void Post(Action work)
     {
