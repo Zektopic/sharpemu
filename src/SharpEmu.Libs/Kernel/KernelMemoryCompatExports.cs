@@ -5493,21 +5493,38 @@ public static partial class KernelMemoryCompatExports
         }
 
         var max = limit == ulong.MaxValue ? 1_048_576UL : Math.Min(limit, 1_048_576UL);
-        Span<byte> leftByte = stackalloc byte[1];
-        Span<byte> rightByte = stackalloc byte[1];
-        for (ulong i = 0; i < max; i++)
+        // OPTIMIZATION: Read in chunks to minimize VirtualMemory lookups and lock contention.
+        const int maxChunkSize = 4096;
+        Span<byte> leftChunk = stackalloc byte[maxChunkSize];
+        Span<byte> rightChunk = stackalloc byte[maxChunkSize];
+        ulong offset = 0;
+
+        while (offset < max)
         {
-            if (!TryReadCompat(ctx, left + i, leftByte) ||
-                !TryReadCompat(ctx, right + i, rightByte))
+            var currentLeft = left + offset;
+            var currentRight = right + offset;
+            var leftRemainingInPage = (int)(maxChunkSize - (currentLeft & (maxChunkSize - 1)));
+            var rightRemainingInPage = (int)(maxChunkSize - (currentRight & (maxChunkSize - 1)));
+            var readLength = (int)Math.Min((long)(max - offset), Math.Min(leftRemainingInPage, rightRemainingInPage));
+            var leftSlice = leftChunk[..readLength];
+            var rightSlice = rightChunk[..readLength];
+
+            if (!TryReadCompat(ctx, currentLeft, leftSlice) ||
+                !TryReadCompat(ctx, currentRight, rightSlice))
             {
                 return false;
             }
 
-            compare = leftByte[0] - rightByte[0];
-            if (compare != 0 || leftByte[0] == 0 || rightByte[0] == 0)
+            for (int i = 0; i < readLength; i++)
             {
-                return true;
+                compare = leftSlice[i] - rightSlice[i];
+                if (compare != 0 || leftSlice[i] == 0 || rightSlice[i] == 0)
+                {
+                    return true;
+                }
             }
+
+            offset += (ulong)readLength;
         }
 
         compare = 0;
@@ -7882,30 +7899,48 @@ public static partial class KernelMemoryCompatExports
         out int compare)
     {
         compare = 0;
-        Span<byte> leftBuffer = stackalloc byte[1];
-        Span<byte> rightBuffer = stackalloc byte[1];
-        for (ulong index = 0; index < limit; index++)
+        var max = limit == ulong.MaxValue ? 1_048_576UL : Math.Min(limit, 1_048_576UL);
+        // OPTIMIZATION: Read in chunks to minimize VirtualMemory lookups and lock contention.
+        const int maxChunkSize = 4096;
+        Span<byte> leftChunk = stackalloc byte[maxChunkSize];
+        Span<byte> rightChunk = stackalloc byte[maxChunkSize];
+        ulong offset = 0;
+
+        while (offset < max)
         {
-            if (!TryReadCompat(ctx, left + index, leftBuffer) ||
-                !TryReadCompat(ctx, right + index, rightBuffer))
+            var currentLeft = left + offset;
+            var currentRight = right + offset;
+            var leftRemainingInPage = (int)(maxChunkSize - (currentLeft & (maxChunkSize - 1)));
+            var rightRemainingInPage = (int)(maxChunkSize - (currentRight & (maxChunkSize - 1)));
+            var readLength = (int)Math.Min((long)(max - offset), Math.Min(leftRemainingInPage, rightRemainingInPage));
+            var leftSlice = leftChunk[..readLength];
+            var rightSlice = rightChunk[..readLength];
+
+            if (!TryReadCompat(ctx, currentLeft, leftSlice) ||
+                !TryReadCompat(ctx, currentRight, rightSlice))
             {
                 return false;
             }
 
-            var leftValue = leftBuffer[0];
-            var rightValue = rightBuffer[0];
-            var leftLower = ToAsciiLower(leftValue);
-            var rightLower = ToAsciiLower(rightValue);
-            if (leftLower != rightLower)
+            for (int i = 0; i < readLength; i++)
             {
-                compare = leftLower - rightLower;
-                return true;
+                var leftValue = leftSlice[i];
+                var rightValue = rightSlice[i];
+                var leftLower = ToAsciiLower(leftValue);
+                var rightLower = ToAsciiLower(rightValue);
+                if (leftLower != rightLower)
+                {
+                    compare = leftLower - rightLower;
+                    return true;
+                }
+
+                if (leftValue == 0)
+                {
+                    return true;
+                }
             }
 
-            if (leftValue == 0)
-            {
-                return true;
-            }
+            offset += (ulong)readLength;
         }
 
         return true;
