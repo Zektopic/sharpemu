@@ -96,10 +96,28 @@ internal static partial class MetalVideoPresenter
         bool PublishTarget,
         ulong ShaderAddress);
 
-    private sealed record PipelineKey(
-        MetalCompiledGuestShader? VertexShader,
-        MetalCompiledGuestShader PixelShader,
-        ulong StateHash);
+    private readonly struct PipelineKey : IEquatable<PipelineKey>
+    {
+        public readonly MetalCompiledGuestShader? VertexShader;
+        public readonly MetalCompiledGuestShader PixelShader;
+        public readonly ulong StateHash;
+
+        public PipelineKey(MetalCompiledGuestShader? vertexShader, MetalCompiledGuestShader pixelShader, ulong stateHash)
+        {
+            VertexShader = vertexShader;
+            PixelShader = pixelShader;
+            StateHash = stateHash;
+        }
+
+        public bool Equals(PipelineKey other) =>
+            ReferenceEquals(VertexShader, other.VertexShader) &&
+            ReferenceEquals(PixelShader, other.PixelShader) &&
+            StateHash == other.StateHash;
+
+        public override bool Equals(object? obj) => obj is PipelineKey other && Equals(other);
+
+        public override int GetHashCode() => HashCode.Combine(VertexShader, PixelShader, StateHash);
+    }
 
     private static long _perfDrawCount;
     private static long _perfDrawTicks;
