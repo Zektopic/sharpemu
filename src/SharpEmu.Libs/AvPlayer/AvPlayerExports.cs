@@ -767,7 +767,7 @@ public static class AvPlayerExports
         startInfo.ArgumentList.Add("-loglevel");
         startInfo.ArgumentList.Add("error");
         startInfo.ArgumentList.Add("-i");
-        startInfo.ArgumentList.Add(player.SourcePath);
+        startInfo.ArgumentList.Add($"file:{player.SourcePath}");
         startInfo.ArgumentList.Add("-map");
         startInfo.ArgumentList.Add("0:v:0");
         startInfo.ArgumentList.Add("-an");
@@ -831,7 +831,7 @@ public static class AvPlayerExports
         startInfo.ArgumentList.Add("-loglevel");
         startInfo.ArgumentList.Add("error");
         startInfo.ArgumentList.Add("-i");
-        startInfo.ArgumentList.Add(player.SourcePath);
+        startInfo.ArgumentList.Add($"file:{player.SourcePath}");
         startInfo.ArgumentList.Add("-map");
         startInfo.ArgumentList.Add("0:a:0");
         startInfo.ArgumentList.Add("-vn");
@@ -1069,7 +1069,8 @@ public static class AvPlayerExports
         startInfo.ArgumentList.Add("stream=width,height,avg_frame_rate,duration");
         startInfo.ArgumentList.Add("-of");
         startInfo.ArgumentList.Add("default=noprint_wrappers=1");
-        startInfo.ArgumentList.Add(path);
+        startInfo.ArgumentList.Add("-i");
+        startInfo.ArgumentList.Add($"file:{path}");
 
         try
         {
