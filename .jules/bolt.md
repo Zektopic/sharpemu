@@ -1,6 +1,6 @@
 <!--
-SPDX-FileCopyrightText: 2026 SharpEmu Emulator Project
-SPDX-License-Identifier: GPL-2.0-or-later
+  Copyright (C) 2026 SharpEmu Emulator Project
+  SPDX-License-Identifier: GPL-2.0-or-later
 -->
 
 ## 2026-07-25 - Replace reference records with readonly structs for Dictionary keys
