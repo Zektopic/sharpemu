@@ -162,4 +162,59 @@ public sealed class SysAbiExportGeneratorTests
         Assert.DoesNotContain("Inaccessible", generated, StringComparison.Ordinal);
         RoslynTestHost.AssertCompiles(updated);
     }
+
+    [Fact]
+    public void ExportModelEqualityTests()
+    {
+        var generatorType = typeof(SysAbiExportGenerator);
+        var modelType = generatorType.GetNestedType("ExportModel", System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(modelType);
+
+        object Create(string containingType, string methodName, SysAbiExportShape.HandlerShape shape, string typedParameterKinds, string libraryName, string nid, string exportName, int target)
+        {
+            return Activator.CreateInstance(modelType, containingType, methodName, shape, typedParameterKinds, libraryName, nid, exportName, target)!;
+        }
+
+        var baseModel = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1);
+
+        // Equals(object? obj) and Equals(ExportModel? other) identical
+        var identical = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1);
+        Assert.True(baseModel.Equals(identical));
+        Assert.True(baseModel.Equals((object)identical));
+
+        // GetHashCode equality
+        Assert.Equal(baseModel.GetHashCode(), identical.GetHashCode());
+
+        // Equals(null)
+        Assert.False(baseModel.Equals(null));
+        Assert.False(baseModel.Equals((object?)null));
+
+        // Equals(wrong type)
+        Assert.False(baseModel.Equals(new object()));
+
+        // Different fields
+        var diffContainingType = Create("TypeB", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1);
+        Assert.False(baseModel.Equals(diffContainingType));
+
+        var diffMethodName = Create("TypeA", "MethodB", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1);
+        Assert.False(baseModel.Equals(diffMethodName));
+
+        var diffShape = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.Parameterless, "uint", "libA", "nidA", "expA", 1);
+        Assert.False(baseModel.Equals(diffShape));
+
+        var diffTypedKinds = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "int", "libA", "nidA", "expA", 1);
+        Assert.False(baseModel.Equals(diffTypedKinds));
+
+        var diffLibrary = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libB", "nidA", "expA", 1);
+        Assert.False(baseModel.Equals(diffLibrary));
+
+        var diffNid = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidB", "expA", 1);
+        Assert.False(baseModel.Equals(diffNid));
+
+        var diffExportName = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expB", 1);
+        Assert.False(baseModel.Equals(diffExportName));
+
+        var diffTarget = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 2);
+        Assert.False(baseModel.Equals(diffTarget));
+    }
 }
