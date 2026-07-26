@@ -1,0 +1,30 @@
+--- tests/SharpEmu.Libs.Tests/Kernel/KernelSocketCompatExportsTests.cs
++++ tests/SharpEmu.Libs.Tests/Kernel/KernelSocketCompatExportsTests.cs
+@@ -75,14 +75,9 @@
+         Assert.Equal(0, KernelSocketCompatExports.Socket(context));
+         var guestFd = checked((int)context[CpuRegister.Rax]);
+
+-        // Close the socket so that TryGetValue fails in Connect
+-        context[CpuRegister.Rdi] = unchecked((ulong)guestFd);
+-        Assert.Equal(
+-            (int)OrbisGen2Result.ORBIS_GEN2_OK,
+-            KernelMemoryCompatExports.PosixClose(context));
+-        Assert.Equal(0UL, context[CpuRegister.Rax]);
+-
+         KernelSocketCompatExports.HostConnectionFactoryForTesting = (ip, port) =>
+         {
++            // Simulate another thread closing the socket while we are establishing the connection
++            KernelSocketCompatExports.TryCloseSocketFd(guestFd);
+             return (new TcpClient(), new ThrowingDisposeStream());
+         };
+
+@@ -95,8 +90,7 @@
+             // Write a valid sockaddr_in structure to memoryBase (AF_INET = 2, Port = 80, IP = 127.0.0.1)
+             context.Memory.TryWrite(memoryBase, new byte[] { 0, 2, 0, 80, 127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 });
+
+-            // The fd has been closed, so TryGetValue fails in Connect and it triggers the disposal
+-            // of the newly created stream (and client).
++            // TryGetValue fails in Connect and it triggers the disposal of the newly created stream (and client).
+             // Our injected ThrowingDisposeStream throws IOException during Dispose, which is caught and ignored.
+             // The process returns without aborting.
+             Assert.Equal(0, KernelSocketCompatExports.Connect(context));

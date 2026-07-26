@@ -1,0 +1,63 @@
+--- tests/SharpEmu.Libs.Tests/Kernel/KernelSocketCompatExportsTests.cs
++++ tests/SharpEmu.Libs.Tests/Kernel/KernelSocketCompatExportsTests.cs
+@@ -2,6 +2,8 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+
+ using SharpEmu.HLE;
++using System.IO;
++using System.Net.Sockets;
+ using SharpEmu.Libs.Kernel;
+ using Xunit;
+
+@@ -53,4 +55,50 @@
+             KernelSocketCompatExports.TryCloseSocketFd(guestFd);
+         }
+     }
++
++    private sealed class ThrowingDisposeStream : MemoryStream
++    {
++        protected override void Dispose(bool disposing)
++        {
++            throw new IOException("Simulated dispose error");
++        }
++    }
++
++    [Fact]
++    public void Connect_DoubleConnect_GracefullyHandlesStreamDisposeExceptions()
++    {
++        const ulong memoryBase = 0x0000_7FFF_3000_0000;
++        var context = new CpuContext(new FakeCpuMemory(memoryBase, 0x1000), Generation.Gen5);
++        context[CpuRegister.Rdi] = 2; // AF_INET
++        context[CpuRegister.Rsi] = 1; // SOCK_STREAM
++        context[CpuRegister.Rdx] = 6; // IPPROTO_TCP
++
++        Assert.Equal(0, KernelSocketCompatExports.Socket(context));
++        var guestFd = checked((int)context[CpuRegister.Rax]);
++
++        KernelSocketCompatExports.HostConnectionFactoryForTesting = (ip, port) =>
++        {
++            return (new TcpClient(), new ThrowingDisposeStream());
++        };
++
++        try
++        {
++            context[CpuRegister.Rdi] = unchecked((ulong)guestFd);
++            context[CpuRegister.Rsi] = memoryBase;
++            context[CpuRegister.Rdx] = 16;
++
++            // Write a valid sockaddr_in structure to memoryBase (AF_INET = 2, Port = 80, IP = 127.0.0.1)
++            context.Memory.TryWrite(memoryBase, new byte[] { 0, 2, 0, 80, 127, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0 });
++
++            Assert.Equal(0, KernelSocketCompatExports.Connect(context));
++            Assert.Equal(0UL, context[CpuRegister.Rax]);
++
++            // Try to connect again, which will trigger the dispose path for the new connection (handled by Catch(IOException))
++            Assert.Equal(0, KernelSocketCompatExports.Connect(context));
++        }
++        finally
++        {
++            KernelSocketCompatExports.HostConnectionFactoryForTesting = null;
++            KernelSocketCompatExports.TryCloseSocketFd(guestFd);
++        }
++    }
+ }

@@ -24,7 +24,7 @@ internal static class KernelSocketCompatExports
     private static readonly object Gate = new();
     private static readonly Dictionary<int, EmulatedSocketState> Sockets = new();
 
-    internal static Func<IPAddress, int, (TcpClient? Client, Stream? Stream)>? HostConnectionFactoryForTesting;
+    internal static delegate*<IPAddress, int, (TcpClient? Client, Stream? Stream)> HostConnectionFactoryForTesting;
 
     internal static bool IsEmulatedSocketFd(int fd)
     {
@@ -459,10 +459,13 @@ internal static class KernelSocketCompatExports
         out TcpClient client,
         out Stream stream)
     {
-        if (HostConnectionFactoryForTesting != null)
+        unsafe
         {
-            (client, stream) = HostConnectionFactoryForTesting(ipAddress, port)!;
-            return client != null && stream != null;
+            if (HostConnectionFactoryForTesting != null)
+            {
+                (client, stream) = HostConnectionFactoryForTesting(ipAddress, port);
+                return client != null && stream != null;
+            }
         }
 
         client = null!;
