@@ -1,0 +1,11 @@
+--- tests/SharpEmu.Libs.Tests/Kernel/KernelSocketCompatExportsTests.cs
++++ tests/SharpEmu.Libs.Tests/Kernel/KernelSocketCompatExportsTests.cs
+@@ -95,7 +95,7 @@
+             // Our injected ThrowingDisposeStream throws IOException during Dispose, which is caught and ignored.
+             // The process returns without aborting.
+             Assert.Equal(0, KernelSocketCompatExports.Connect(context));
+-            Assert.Equal(ulong.MaxValue, context[CpuRegister.Rax]);
++            Assert.Equal(0UL, context[CpuRegister.Rax]);
+         }
+         finally
+         {

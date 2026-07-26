@@ -1,0 +1,48 @@
+--- src/SharpEmu.Libs/Kernel/KernelSocketCompatExports.cs
++++ src/SharpEmu.Libs/Kernel/KernelSocketCompatExports.cs
+@@ -14,7 +14,7 @@
+     private sealed class EmulatedSocketState
+     {
+         public TcpClient? Client;
+-        public NetworkStream? Stream;
++        public Stream? Stream;
+         public IPAddress BoundAddress = IPAddress.Any;
+         public int BoundPort;
+         public bool Bound;
+@@ -24,6 +24,8 @@
+     private static readonly object Gate = new();
+     private static readonly Dictionary<int, EmulatedSocketState> Sockets = new();
+
++    internal static delegate*<IPAddress, int, (TcpClient? Client, Stream? Stream)> HostConnectionFactoryForTesting;
++
+     internal static bool IsEmulatedSocketFd(int fd)
+     {
+         lock (Gate)
+@@ -177,7 +179,7 @@
+             return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+         }
+
+-        if (!TryEstablishHostTcpConnection(ipAddress, port, out var client, out var stream))
++        if (!TryEstablishHostTcpConnection(ipAddress, port, out var client, out Stream stream))
+         {
+             LogNet($"connect failed: fd={fd} ip={ipAddress} port={port}");
+             ctx[CpuRegister.Rax] = unchecked((ulong)0xFFFFFFFFFFFFFFFF);
+@@ -455,8 +457,17 @@
+         IPAddress ipAddress,
+         int port,
+         out TcpClient client,
+-        out NetworkStream stream)
++        out Stream stream)
+     {
++        unsafe
++        {
++            if (HostConnectionFactoryForTesting != null)
++            {
++                (client, stream) = HostConnectionFactoryForTesting(ipAddress, port);
++                return client != null && stream != null;
++            }
++        }
++
+         client = null!;
+         stream = null!;
+         if (!TryConnectTcpClient(ipAddress, port, out client))
