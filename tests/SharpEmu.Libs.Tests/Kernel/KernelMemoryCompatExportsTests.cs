@@ -18,6 +18,13 @@ public sealed class KernelMemoryCompatStateCollection
 [Collection(KernelMemoryCompatStateCollection.Name)]
 public sealed class KernelMemoryCompatExportsTests
 {
+    private sealed class ThrowingFileStream : FileStream
+    {
+        public ThrowingFileStream(string path) : base(path, FileMode.OpenOrCreate, FileAccess.ReadWrite) { }
+
+        public override void Flush(bool flushToDisk) => throw new IOException("Mock IOException for tests");
+    }
+
     private const ulong GuestMemoryBase = 0x1_0000_0000;
     private const ulong AllocationOutAddress = GuestMemoryBase + 0x100;
     private const ulong SpanStartOutAddress = GuestMemoryBase + 0x108;
@@ -88,6 +95,83 @@ public sealed class KernelMemoryCompatExportsTests
 
         Assert.Equal(-1, result);
         Assert.Equal(ulong.MaxValue, context[CpuRegister.Rax]);
+    }
+
+    [Fact]
+    public void PosixSync_IgnoresIOExceptionDuringFlush()
+    {
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            var memory = new FakeCpuMemory(GuestMemoryBase, 0x1000);
+            var context = new CpuContext(memory, Generation.Gen5);
+
+            var openFilesField = typeof(KernelMemoryCompatExports).GetField("_openFiles", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            var openFiles = (System.Collections.Generic.Dictionary<int, FileStream>)openFilesField!.GetValue(null)!;
+
+            var throwingStream = new ThrowingFileStream(tempFile);
+            var testFd = 9999;
+            openFiles[testFd] = throwingStream;
+
+            try
+            {
+                var result = KernelMemoryCompatExports.PosixSync(context);
+
+                Assert.Equal(0, result);
+                Assert.Equal(0UL, context[CpuRegister.Rax]);
+            }
+            finally
+            {
+                openFiles.Remove(testFd);
+                throwingStream.Dispose();
+            }
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
+    }
+
+    [Fact]
+    public void PosixFsync_IgnoresIOExceptionDuringFlush()
+    {
+        var tempFile = Path.GetTempFileName();
+        try
+        {
+            var memory = new FakeCpuMemory(GuestMemoryBase, 0x1000);
+            var context = new CpuContext(memory, Generation.Gen5);
+            var testFd = 9999;
+            context[CpuRegister.Rdi] = (ulong)testFd;
+
+            var openFilesField = typeof(KernelMemoryCompatExports).GetField("_openFiles", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            var openFiles = (System.Collections.Generic.Dictionary<int, FileStream>)openFilesField!.GetValue(null)!;
+
+            var throwingStream = new ThrowingFileStream(tempFile);
+            openFiles[testFd] = throwingStream;
+
+            try
+            {
+                var result = KernelMemoryCompatExports.PosixFsync(context);
+
+                Assert.Equal(0, result);
+                Assert.Equal(0UL, context[CpuRegister.Rax]);
+            }
+            finally
+            {
+                openFiles.Remove(testFd);
+                throwingStream.Dispose();
+            }
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
     }
 
     [Fact]
