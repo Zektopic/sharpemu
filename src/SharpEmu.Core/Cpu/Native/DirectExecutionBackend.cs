@@ -13,6 +13,7 @@ using SharpEmu.Core.Cpu.Debugging;
 using SharpEmu.Core.Loader;
 using SharpEmu.Core.Memory;
 using SharpEmu.HLE;
+using SharpEmu.Libs.Diagnostics;
 
 namespace SharpEmu.Core.Cpu.Native;
 
@@ -3651,6 +3652,7 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 			$"[LOADER][INFO] Scheduled guest thread '{thread.Name}' handle=0x{thread.ThreadHandle:X16} " +
 			$"entry=0x{thread.EntryPoint:X16} arg=0x{thread.Argument:X16} priority={thread.Priority} " +
 			$"host_priority={MapGuestThreadPriority(thread.Priority)} affinity=0x{thread.AffinityMask:X}");
+		LoadProgressDiagnostics.ArmIfNorthAudioThread(thread.Name);
 		Pump(creatorContext, "pthread_create");
 		// Pump is suppressed while another cooperative dispatch is active. The
 		// background dispatcher would eventually observe this thread, but an
@@ -5312,7 +5314,7 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 			var hostCpu = processorCount < 8
 				? guestCpu % processorCount
 				: processorCount >= 16
-					? guestCpu * 2
+					? MapGuestCpuAcrossSmtLanes(guestCpu, processorCount)
 					: guestCpu;
 			if (hostCpu < processorCount)
 			{
@@ -5322,6 +5324,45 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 
 		return hostAffinityMask;
 	}
+
+	/// <summary>
+	/// Places guest CPUs on distinct physical cores first, then wraps onto the
+	/// SMT siblings. Doubling the index alone only works while the title stays
+	/// inside the first half of the guest CPU set: beyond that every mapped lane
+	/// lands past the host's processor count and gets dropped, which silently
+	/// leaves those threads unpinned. Demon's Souls asks for CPUs 0-12 and keeps
+	/// its renderer on 9 and 11, so dropping the overflow un-pinned both the
+	/// renderer and a third of its job pool onto every core at once.
+	/// </summary>
+	private static int MapGuestCpuAcrossSmtLanes(int guestCpu, int processorCount)
+	{
+		// Reserve the top lanes for the emulator itself. A title sized for a
+		// console's dedicated cores will happily keep a worker per guest CPU
+		// spinning on an empty queue — Demon's Souls' job pool runs ~90% busy
+		// doing nothing — and spreading those across every host lane leaves the
+		// GPU translation and present threads fighting them for a slice. Packing
+		// near-idle spinners tighter costs them almost nothing and buys back
+		// whole cores for the work that actually produces frames.
+		var usableLanes = Math.Max(processorCount - EmulatorReservedLanes, 2);
+		var physicalCores = usableLanes / 2;
+		var lane = guestCpu % usableLanes;
+		return lane < physicalCores
+			? lane * 2
+			: ((lane - physicalCores) * 2) + 1;
+	}
+
+	/// <summary>
+	/// Host lanes kept away from guest threads. Measured on a 16-lane host with
+	/// Demon's Souls: reserving 0/4/6/8 lanes gave 6.08/6.78/7.20/5.62 fps, so
+	/// the useful range is a bit over a third of the machine — too few and the
+	/// emulator is crowded out, too many and the guest cannot make progress.
+	/// </summary>
+	private static readonly int EmulatorReservedLanes =
+		int.TryParse(
+			Environment.GetEnvironmentVariable("SHARPEMU_RESERVED_HOST_LANES"),
+			out var reserved) && reserved >= 0
+			? reserved
+			: Math.Max(2, Environment.ProcessorCount * 3 / 8);
 
 	public bool TrySetGuestThreadPriority(ulong guestThreadHandle, int guestPriority)
 	{

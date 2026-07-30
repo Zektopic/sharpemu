@@ -1,7 +1,0 @@
-Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: sharpemu
-Source: https://github.com/Zektopic/sharpemu
-
-Files: .jules/* Program.cs benchmark_project.csproj run_bench.cs test_perf3.cs tests/SharpEmu.Core.Tests/Loader/SelfLoaderTests.cs tests/SharpEmu.Libs.Tests/LoggingPerformanceTests.cs
-Copyright: 2026 sharpemu contributors
-License: MIT

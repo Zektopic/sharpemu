@@ -45,10 +45,27 @@ public sealed class GuiSettings
     /// <summary>UI language, matching a file code under Languages/ (e.g. "en", "tr").</summary>
     public string Language { get; set; } = "en";
 
+    /// <summary>Default text-entry profile exposed to games.</summary>
+    public string DefaultProfile { get; set; } = "Sharp";
+
     /// <summary>Publish launcher/game status to Discord Rich Presence.</summary>
     public bool DiscordRichPresence { get; set; } = true;
 
     public bool CheckForUpdatesOnStartup { get; set; } = true;
+
+    public string WindowMode { get; set; } = "Windowed";
+
+    public string Resolution { get; set; } = "1920x1080";
+
+    public int DisplayIndex { get; set; }
+
+    public int RefreshRate { get; set; }
+
+    public string ScalingMode { get; set; } = "Fit";
+
+    public bool VSync { get; set; } = true;
+
+    public string HdrMode { get; set; } = "Auto";
 
     /// <summary>Names of SHARPEMU_* switches set to "1" in the emulator's environment at launch.</summary>
     public List<string> EnvironmentToggles { get; set; } = new();
@@ -98,11 +115,29 @@ public sealed class GuiSettings
         settings.EnvironmentToggles = FilterNullOrEmpty(settings.EnvironmentToggles);
         settings.LogLevel ??= "Info";
         settings.Language ??= "en";
+        var legacyProfile = settings.EnvironmentToggles
+            .Select(entry => entry.Split('=', 2, StringSplitOptions.TrimEntries))
+            .FirstOrDefault(parts =>
+                parts.Length == 2 &&
+                string.Equals(parts[0], "SHARPEMU_DEFAULT_PROFILE", StringComparison.OrdinalIgnoreCase));
+        settings.EnvironmentToggles.RemoveAll(entry =>
+            string.Equals(
+                entry.Split('=', 2, StringSplitOptions.TrimEntries)[0],
+                "SHARPEMU_DEFAULT_PROFILE",
+                StringComparison.OrdinalIgnoreCase));
+        settings.DefaultProfile = NormalizeDefaultProfile(
+            legacyProfile is { Length: 2 } ? legacyProfile[1] : settings.DefaultProfile);
         settings.DiscordClientId ??= "1525606762248540221";
         if (settings.RenderResolutionScale <= 0 || settings.RenderResolutionScale > 2.0)
         {
             settings.RenderResolutionScale = 1.0;
         }
+        settings.WindowMode = NormalizeChoice(settings.WindowMode, "Windowed", "Borderless", "Exclusive");
+        settings.Resolution = NormalizeResolution(settings.Resolution);
+        settings.ScalingMode = NormalizeChoice(settings.ScalingMode, "Fit", "Cover", "Stretch", "Integer");
+        settings.HdrMode = NormalizeChoice(settings.HdrMode, "Auto", "On", "Off");
+        settings.DisplayIndex = Math.Max(0, settings.DisplayIndex);
+        settings.RefreshRate = Math.Clamp(settings.RefreshRate, 0, 1000);
 
         return settings;
     }
@@ -116,6 +151,26 @@ public sealed class GuiSettings
         }
 
         return source.Where(entry => !string.IsNullOrEmpty(entry)).ToList();
+    }
+
+    private static string NormalizeChoice(string? value, string fallback, params string[] choices) =>
+        choices.Prepend(fallback).FirstOrDefault(
+            choice => string.Equals(choice, value, StringComparison.OrdinalIgnoreCase)) ?? fallback;
+
+    private static string NormalizeResolution(string? value)
+    {
+        if (!HostDisplayOptions.TryParseResolution(value, out var width, out var height))
+        {
+            return "1920x1080";
+        }
+
+        return $"{width}x{height}";
+    }
+
+    internal static string NormalizeDefaultProfile(string? value)
+    {
+        var trimmed = value?.Trim();
+        return string.IsNullOrEmpty(trimmed) ? "Sharp" : trimmed;
     }
 
     public void Save()
