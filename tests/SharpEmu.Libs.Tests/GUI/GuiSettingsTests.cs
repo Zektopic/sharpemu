@@ -30,6 +30,45 @@ public sealed class GuiSettingsTests
         Assert.Empty(settings.GameFolders);
         Assert.Empty(settings.ExcludedGames);
         Assert.Empty(settings.EnvironmentToggles);
+        Assert.Equal("Windowed", settings.WindowMode);
+        Assert.Equal("1920x1080", settings.Resolution);
+        Assert.Equal("Fit", settings.ScalingMode);
+        Assert.Equal("Auto", settings.HdrMode);
+        Assert.True(settings.VSync);
+    }
+
+    [Fact]
+    public void NormalizeFromJson_InvalidVideoValues_FallBackAndClamp()
+    {
+        const string json = """
+            {
+              "WindowMode": "not-a-mode",
+              "Resolution": "not-a-resolution",
+              "ScalingMode": "nearest-ish",
+              "HdrMode": "maybe",
+              "DisplayIndex": -4,
+              "RefreshRate": 5000
+            }
+            """;
+
+        var settings = GuiSettings.NormalizeFromJson(json);
+
+        Assert.Equal("Windowed", settings.WindowMode);
+        Assert.Equal("1920x1080", settings.Resolution);
+        Assert.Equal("Fit", settings.ScalingMode);
+        Assert.Equal("Auto", settings.HdrMode);
+        Assert.Equal(0, settings.DisplayIndex);
+        Assert.Equal(1000, settings.RefreshRate);
+    }
+
+    [Fact]
+    public void NormalizeFromJson_CustomResolution_IsPreserved()
+    {
+        const string json = """{ "Resolution": "3440x1440" }""";
+
+        var settings = GuiSettings.NormalizeFromJson(json);
+
+        Assert.Equal("3440x1440", settings.Resolution);
     }
 
     [Fact]
@@ -54,6 +93,67 @@ public sealed class GuiSettingsTests
         Assert.Equal(["C:\\Games"], settings.GameFolders);
         Assert.Equal(["C:\\Games\\skip.bin"], settings.ExcludedGames);
         Assert.Equal(["SHARPEMU_TRACE"], settings.EnvironmentToggles);
+    }
+
+    [Fact]
+    public void NormalizeFromJson_AllLauncherOptions_ArePreserved()
+    {
+        const string json = """
+            {
+              "LogLevel": "Debug",
+              "ImportTraceLimit": 96,
+              "StrictDynlibResolution": true,
+              "LogToFile": true,
+              "LogFilePath": "C:\\Logs\\sharpemu.log",
+              "OverrideLogFile": true,
+              "PlayTitleMusic": false,
+              "EmulatorPath": "C:\\SharpEmu\\SharpEmu.exe",
+              "Language": "ru",
+              "DefaultProfile": "Player",
+              "DiscordRichPresence": false,
+              "CheckForUpdatesOnStartup": false,
+              "WindowMode": "Borderless",
+              "Resolution": "2560x1440",
+              "DisplayIndex": 2,
+              "RefreshRate": 144,
+              "ScalingMode": "Integer",
+              "VSync": false,
+              "HdrMode": "On",
+              "EnvironmentToggles": [
+                "SHARPEMU_VK_VALIDATION",
+                "SHARPEMU_GUEST_IMAGE_CPU_SYNC"
+              ],
+              "RenderResolutionScale": 0.5,
+              "DiscordClientId": "999"
+            }
+            """;
+
+        var settings = GuiSettings.NormalizeFromJson(json);
+
+        Assert.Equal("Debug", settings.LogLevel);
+        Assert.Equal(96, settings.ImportTraceLimit);
+        Assert.True(settings.StrictDynlibResolution);
+        Assert.True(settings.LogToFile);
+        Assert.Equal("C:\\Logs\\sharpemu.log", settings.LogFilePath);
+        Assert.True(settings.OverrideLogFile);
+        Assert.False(settings.PlayTitleMusic);
+        Assert.Equal("C:\\SharpEmu\\SharpEmu.exe", settings.EmulatorPath);
+        Assert.Equal("ru", settings.Language);
+        Assert.Equal("Player", settings.DefaultProfile);
+        Assert.False(settings.DiscordRichPresence);
+        Assert.False(settings.CheckForUpdatesOnStartup);
+        Assert.Equal("Borderless", settings.WindowMode);
+        Assert.Equal("2560x1440", settings.Resolution);
+        Assert.Equal(2, settings.DisplayIndex);
+        Assert.Equal(144, settings.RefreshRate);
+        Assert.Equal("Integer", settings.ScalingMode);
+        Assert.False(settings.VSync);
+        Assert.Equal("On", settings.HdrMode);
+        Assert.Equal(
+            ["SHARPEMU_VK_VALIDATION", "SHARPEMU_GUEST_IMAGE_CPU_SYNC"],
+            settings.EnvironmentToggles);
+        Assert.Equal(0.5, settings.RenderResolutionScale);
+        Assert.Equal("999", settings.DiscordClientId);
     }
 
     // An empty Discord client ID intentionally disables Rich Presence.
@@ -96,5 +196,45 @@ public sealed class GuiSettingsTests
         Assert.Empty(settings.GameFolders);
         Assert.Empty(settings.ExcludedGames);
         Assert.Empty(settings.EnvironmentToggles);
+    }
+
+    [Fact]
+    public void EffectiveLaunchSettings_PerGameVideoValuesOverrideOnlySelectedFields()
+    {
+        var global = new GuiSettings
+        {
+            WindowMode = "Windowed",
+            Resolution = "1920x1080",
+            DisplayIndex = 1,
+            RefreshRate = 60,
+            ScalingMode = "Fit",
+            HdrMode = "Auto",
+            VSync = true,
+        };
+        var perGame = new PerGameSettings
+        {
+            Resolution = "2560x1440",
+            DisplayIndex = 2,
+            HdrMode = "On",
+            VSync = false,
+        };
+
+        var effective = EffectiveLaunchSettings.Resolve(global, perGame);
+
+        Assert.Equal("Windowed", effective.WindowMode);
+        Assert.Equal("2560x1440", effective.Resolution);
+        Assert.Equal(2, effective.DisplayIndex);
+        Assert.Equal(60, effective.RefreshRate);
+        Assert.Equal("Fit", effective.ScalingMode);
+        Assert.Equal("On", effective.HdrMode);
+        Assert.False(effective.VSync);
+    }
+
+    [Fact]
+    public void PerGameSettings_VideoOverridesParticipateInEmptyCheck()
+    {
+        Assert.True(new PerGameSettings().IsEmpty);
+        Assert.False(new PerGameSettings { ScalingMode = "Integer" }.IsEmpty);
+        Assert.False(new PerGameSettings { HdrMode = "Off" }.IsEmpty);
     }
 }

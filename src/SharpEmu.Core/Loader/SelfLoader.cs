@@ -1190,7 +1190,7 @@ public sealed class SelfLoader : ISelfLoader
     // full descriptor list would incur on large modules. A NID qualifies as soon as
     // one of its descriptors is non-weak, or is weak but resolvable via the module
     // manager.
-    private static HashSet<string> CollectStubEligibleNids(
+    internal static HashSet<string> CollectStubEligibleNids(
         IReadOnlyList<RelocationDescriptor> descriptors,
         IModuleManager? moduleManager)
     {
@@ -1213,7 +1213,7 @@ public sealed class SelfLoader : ISelfLoader
         return eligible;
     }
 
-    private static bool ShouldCreateImportStub(
+    internal static bool ShouldCreateImportStub(
         string nid,
         IReadOnlyList<RelocationDescriptor> descriptors,
         IModuleManager? moduleManager)
@@ -2386,7 +2386,7 @@ public sealed class SelfLoader : ISelfLoader
         return virtualMemory.TryWrite(address, buffer);
     }
 
-    private static ulong ComputeRelocationValue(RelocationDescriptor descriptor, ulong resolvedSymbolValue)
+    internal static ulong ComputeRelocationValue(RelocationDescriptor descriptor, ulong resolvedSymbolValue)
     {
         var baseValue = descriptor.ValueKind == RelocationValueKind.SymbolSize
             ? descriptor.SymbolValue
@@ -2799,7 +2799,7 @@ public sealed class SelfLoader : ISelfLoader
 
     private readonly record struct ModuleTlsInfo(ulong MemorySize, ulong StaticOffset);
 
-    private enum RelocationValueKind : byte
+    internal enum RelocationValueKind : byte
     {
         Pointer = 0,
         TlsModuleId = 1,
@@ -2811,14 +2811,14 @@ public sealed class SelfLoader : ISelfLoader
         SymbolSize = 4,
     }
 
-    private enum RelocationWriteKind : byte
+    internal enum RelocationWriteKind : byte
     {
         UInt64 = 0,
         UInt32 = 1,
         Int32 = 2,
     }
 
-    private readonly record struct RelocationDescriptor(
+    internal readonly record struct RelocationDescriptor(
         ulong TargetAddress,
         long Addend,
         string? ImportNid,

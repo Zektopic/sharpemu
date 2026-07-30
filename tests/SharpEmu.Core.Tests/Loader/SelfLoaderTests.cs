@@ -1,165 +1,185 @@
 // Copyright (C) 2026 SharpEmu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
-using System;
-using System.Diagnostics;
-using System.Collections.Generic;
-using System.Linq;
+using SharpEmu.Core.Loader;
+using Xunit;
 
 namespace SharpEmu.Core.Tests.Loader;
 
-// A simple benchmarking script for the stub import logic
-public class SelfLoaderBenchmarks
+/// <summary>
+/// Covers the import-stub eligibility rules and relocation value arithmetic in
+/// <see cref="SelfLoader"/>. The loader carries equivalent assertions in
+/// RunRelocationSelfChecks, but that method is [Conditional("DEBUG")] and CI
+/// builds Release, so these paths were never actually verified by a build.
+/// </summary>
+public class SelfLoaderTests
 {
-    private enum RelocationValueKind : byte
-    {
-        Pointer = 0,
-        TlsModuleId = 1,
-        TlsOffset = 2,
-        PcRelative = 3,
-        SymbolSize = 4,
-    }
-
-    private enum RelocationWriteKind : byte
-    {
-        UInt64 = 0,
-        UInt32 = 1,
-        Int32 = 2,
-    }
-
-    private readonly record struct RelocationDescriptor(
-        ulong TargetAddress,
-        long Addend,
-        string? ImportNid,
-        ulong SymbolValue,
-        RelocationValueKind ValueKind,
-        bool IsDataImport,
-        RelocationWriteKind WriteKind = RelocationWriteKind.UInt64,
-        bool IsWeak = false);
-
-    private static bool ShouldCreateImportStub(
+    private static SelfLoader.RelocationDescriptor Import(
         string nid,
-        IReadOnlyList<RelocationDescriptor> descriptors,
-        object moduleManager)
-    {
-        for (var i = 0; i < descriptors.Count; i++)
-        {
-            var descriptor = descriptors[i];
-            if (!string.Equals(descriptor.ImportNid, nid, StringComparison.Ordinal))
-            {
-                continue;
-            }
-            if (!descriptor.IsWeak /* || moduleManager?.TryGetExport(nid, out _) == true */)
-            {
-                return true;
-            }
-        }
+        bool isWeak,
+        ulong targetAddress = 0x1000,
+        long addend = 0) =>
+        new(
+            TargetAddress: targetAddress,
+            Addend: addend,
+            ImportNid: nid,
+            SymbolValue: 0,
+            ValueKind: SelfLoader.RelocationValueKind.Pointer,
+            IsDataImport: false,
+            WriteKind: SelfLoader.RelocationWriteKind.UInt64,
+            IsWeak: isWeak);
 
-        return false;
+    [Fact]
+    public void ShouldCreateImportStub_StrongSymbol_CreatesStub()
+    {
+        var strong = Import("strong", isWeak: false);
+
+        Assert.True(SelfLoader.ShouldCreateImportStub("strong", [strong], moduleManager: null));
     }
 
-    public static void RunBaseline()
+    [Fact]
+    public void ShouldCreateImportStub_UnresolvedWeakSymbol_DoesNotCreateStub()
     {
-        var orderedImportNids = new List<string>();
-        var descriptors = new List<RelocationDescriptor>();
+        // An unresolved weak import must stay null rather than trapping, so it
+        // must not receive a stub.
+        var weak = Import("weak", isWeak: true);
 
-        for (int i = 0; i < 1000; i++)
-        {
-            string nid = $"nid_{i}";
-            orderedImportNids.Add(nid);
-            descriptors.Add(new RelocationDescriptor(0, 0, nid, 0, RelocationValueKind.Pointer, false, RelocationWriteKind.UInt64, i % 2 == 0));
-        }
-
-        long initialMemory = GC.GetAllocatedBytesForCurrentThread();
-        var sw = Stopwatch.StartNew();
-
-        for (int iter = 0; iter < 1000; iter++)
-        {
-            var stubImportNids = orderedImportNids
-                .Where(nid => ShouldCreateImportStub(nid, descriptors, null))
-                .ToArray();
-
-            // Dummy for CreateImportStubMapping
-            var stubsByAddress = new Dictionary<ulong, string>();
-            for(int i = 0; i < stubImportNids.Length; i++) {
-                stubsByAddress[(ulong)i] = stubImportNids[i];
-            }
-
-            int printCount = Math.Min(10, stubImportNids.Length);
-            for (int i = 0; i < printCount; i++)
-            {
-                var nid = stubImportNids[i];
-                var addr = stubsByAddress.First(x => x.Value == nid).Key;
-            }
-        }
-
-        sw.Stop();
-        long allocatedMemory = GC.GetAllocatedBytesForCurrentThread() - initialMemory;
-
-        Console.WriteLine($"Baseline - Time: {sw.ElapsedMilliseconds}ms, Allocated: {allocatedMemory} bytes");
+        Assert.False(SelfLoader.ShouldCreateImportStub("weak", [weak], moduleManager: null));
     }
 
-    public static void RunOptimized()
+    [Fact]
+    public void ShouldCreateImportStub_UnknownNid_DoesNotCreateStub()
     {
-        var orderedImportNids = new List<string>();
-        var descriptors = new List<RelocationDescriptor>();
+        var strong = Import("strong", isWeak: false);
 
-        for (int i = 0; i < 1000; i++)
-        {
-            string nid = $"nid_{i}";
-            orderedImportNids.Add(nid);
-            descriptors.Add(new RelocationDescriptor(0, 0, nid, 0, RelocationValueKind.Pointer, false, RelocationWriteKind.UInt64, i % 2 == 0));
-        }
-
-        long initialMemory = GC.GetAllocatedBytesForCurrentThread();
-        var sw = Stopwatch.StartNew();
-
-        for (int iter = 0; iter < 1000; iter++)
-        {
-            var stubImportNids = new List<string>(orderedImportNids.Count);
-            foreach (var nid in orderedImportNids)
-            {
-                if (ShouldCreateImportStub(nid, descriptors, null))
-                {
-                    stubImportNids.Add(nid);
-                }
-            }
-
-            // Dummy for CreateImportStubMapping
-            var stubsByAddress = new Dictionary<ulong, string>();
-            for(int i = 0; i < stubImportNids.Count; i++) {
-                stubsByAddress[(ulong)i] = stubImportNids[i];
-            }
-
-            int printCount = Math.Min(10, stubImportNids.Count);
-            for (int i = 0; i < printCount; i++)
-            {
-                var nid = stubImportNids[i];
-                ulong addr = 0;
-                foreach (var kvp in stubsByAddress)
-                {
-                    if (kvp.Value == nid)
-                    {
-                        addr = kvp.Key;
-                        break;
-                    }
-                }
-            }
-        }
-
-        sw.Stop();
-        long allocatedMemory = GC.GetAllocatedBytesForCurrentThread() - initialMemory;
-
-        Console.WriteLine($"Optimized - Time: {sw.ElapsedMilliseconds}ms, Allocated: {allocatedMemory} bytes");
+        Assert.False(SelfLoader.ShouldCreateImportStub("absent", [strong], moduleManager: null));
     }
 
-    public static void Main()
+    [Fact]
+    public void ShouldCreateImportStub_NidWithBothWeakAndStrongDescriptors_CreatesStub()
     {
-        // Warmup
-        RunBaseline();
-        RunOptimized();
-        Console.WriteLine("--- Actual ---");
-        RunBaseline();
-        RunOptimized();
+        // A single non-weak descriptor qualifies the NID even when a weak
+        // descriptor for the same NID is seen first.
+        var weak = Import("mixed", isWeak: true, targetAddress: 0x2000);
+        var strong = Import("mixed", isWeak: false, targetAddress: 0x3000);
+
+        Assert.True(SelfLoader.ShouldCreateImportStub("mixed", [weak, strong], moduleManager: null));
+    }
+
+    [Fact]
+    public void ShouldCreateImportStub_MatchesNidOrdinally()
+    {
+        var strong = Import("Strong", isWeak: false);
+
+        Assert.False(SelfLoader.ShouldCreateImportStub("strong", [strong], moduleManager: null));
+    }
+
+    [Fact]
+    public void CollectStubEligibleNids_KeepsStrongAndDropsUnresolvedWeak()
+    {
+        var weak = Import("weak", isWeak: true, targetAddress: 0x2000);
+        var strong = Import("strong", isWeak: false, targetAddress: 0x3000);
+
+        var eligible = SelfLoader.CollectStubEligibleNids([weak, strong], moduleManager: null);
+
+        Assert.Contains("strong", eligible);
+        Assert.DoesNotContain("weak", eligible);
+    }
+
+    [Fact]
+    public void CollectStubEligibleNids_IgnoresDescriptorsWithoutAnImportNid()
+    {
+        var local = new SelfLoader.RelocationDescriptor(
+            TargetAddress: 0x4000,
+            Addend: 0,
+            ImportNid: null,
+            SymbolValue: 0x8000,
+            ValueKind: SelfLoader.RelocationValueKind.Pointer,
+            IsDataImport: false);
+
+        Assert.Empty(SelfLoader.CollectStubEligibleNids([local], moduleManager: null));
+    }
+
+    [Fact]
+    public void CollectStubEligibleNids_AgreesWithPerNidRule()
+    {
+        // CollectStubEligibleNids exists purely as an O(descriptors) replacement
+        // for rescanning with ShouldCreateImportStub per NID. The two must not
+        // disagree, which is the invariant its own comment claims.
+        SelfLoader.RelocationDescriptor[] descriptors =
+        [
+            Import("alpha", isWeak: false, targetAddress: 0x1000),
+            Import("beta", isWeak: true, targetAddress: 0x1008),
+            Import("gamma", isWeak: true, targetAddress: 0x1010),
+            Import("gamma", isWeak: false, targetAddress: 0x1018),
+            Import("delta", isWeak: false, targetAddress: 0x1020),
+            Import("beta", isWeak: true, targetAddress: 0x1028),
+        ];
+
+        var eligible = SelfLoader.CollectStubEligibleNids(descriptors, moduleManager: null);
+
+        foreach (var nid in new[] { "alpha", "beta", "gamma", "delta", "absent" })
+        {
+            Assert.Equal(
+                SelfLoader.ShouldCreateImportStub(nid, descriptors, moduleManager: null),
+                eligible.Contains(nid));
+        }
+    }
+
+    [Fact]
+    public void ComputeRelocationValue_PcRelative_AppliesSymbolPlusAddendMinusPlace()
+    {
+        // R_X86_64_PC32: S + A - P => 0x1800 + (-4) - 0x1000 == 0x7FC.
+        var pc32 = new SelfLoader.RelocationDescriptor(
+            TargetAddress: 0x1000,
+            Addend: -4,
+            ImportNid: null,
+            SymbolValue: 0x1800,
+            ValueKind: SelfLoader.RelocationValueKind.PcRelative,
+            IsDataImport: false,
+            WriteKind: SelfLoader.RelocationWriteKind.Int32);
+
+        Assert.Equal(
+            0x7FC,
+            unchecked((long)SelfLoader.ComputeRelocationValue(pc32, pc32.SymbolValue)));
+    }
+
+    [Fact]
+    public void ComputeRelocationValue_UnresolvedWeak_UsesZeroSymbolValue()
+    {
+        // An unresolved weak relocation resolves S to 0, leaving just the addend.
+        var weak = Import("weak", isWeak: true, targetAddress: 0x2000, addend: 7);
+
+        Assert.Equal(7UL, SelfLoader.ComputeRelocationValue(weak, resolvedSymbolValue: 0));
+    }
+
+    [Fact]
+    public void ComputeRelocationValue_SymbolSize_PrefersDescriptorSymbolValue()
+    {
+        // SymbolSize encodes the size in the descriptor itself, so the resolved
+        // symbol address must be ignored.
+        var sizeReloc = new SelfLoader.RelocationDescriptor(
+            TargetAddress: 0x5000,
+            Addend: 3,
+            ImportNid: null,
+            SymbolValue: 0x40,
+            ValueKind: SelfLoader.RelocationValueKind.SymbolSize,
+            IsDataImport: false);
+
+        Assert.Equal(0x43UL, SelfLoader.ComputeRelocationValue(sizeReloc, resolvedSymbolValue: 0xDEAD));
+    }
+
+    [Fact]
+    public void ComputeRelocationValue_Pointer_AddsAddendToResolvedSymbol()
+    {
+        var pointer = new SelfLoader.RelocationDescriptor(
+            TargetAddress: 0x6000,
+            Addend: 0x10,
+            ImportNid: null,
+            SymbolValue: 0,
+            ValueKind: SelfLoader.RelocationValueKind.Pointer,
+            IsDataImport: false);
+
+        Assert.Equal(0x1234_0010UL, SelfLoader.ComputeRelocationValue(pointer, resolvedSymbolValue: 0x1234_0000));
     }
 }
