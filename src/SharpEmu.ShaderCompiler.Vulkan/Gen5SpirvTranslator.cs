@@ -63,29 +63,54 @@ public static partial class Gen5SpirvTranslator
         IReadOnlyList<uint>? pixelInputCntl = null,
         ulong storageBufferOffsetAlignment = 1)
     {
-        if (outputs.Count > 8 || outputs.Any(output => output.GuestSlot > 7))
+        if (outputs.Count > 8)
         {
             shader = default!;
             error = "pixel outputs must contain at most eight guest slots in the 0..7 range";
             return false;
         }
 
-        if (outputs.Select(output => output.GuestSlot).Distinct().Count() != outputs.Count ||
-            outputs.Select(output => output.HostLocation).Distinct().Count() != outputs.Count)
+        uint guestSlotMask = 0;
+        for (int i = 0; i < outputs.Count; i++)
         {
-            shader = default!;
-            error = "pixel output guest slots and host locations must be unique";
-            return false;
+            uint guestSlot = outputs[i].GuestSlot;
+            if (guestSlot > 7)
+            {
+                shader = default!;
+                error = "pixel outputs must contain at most eight guest slots in the 0..7 range";
+                return false;
+            }
+
+            if ((guestSlotMask & (1u << (int)guestSlot)) != 0)
+            {
+                shader = default!;
+                error = "pixel output guest slots and host locations must be unique";
+                return false;
+            }
+            guestSlotMask |= 1u << (int)guestSlot;
         }
 
-        if (!outputs
-                .OrderBy(output => output.HostLocation)
-                .Select((output, index) => output.HostLocation == (uint)index)
-                .All(isDense => isDense))
+        for (int i = 0; i < outputs.Count; i++)
         {
-            shader = default!;
-            error = "pixel output host locations must be dense in the 0..N-1 range";
-            return false;
+            for (int j = i + 1; j < outputs.Count; j++)
+            {
+                if (outputs[i].HostLocation == outputs[j].HostLocation)
+                {
+                    shader = default!;
+                    error = "pixel output guest slots and host locations must be unique";
+                    return false;
+                }
+            }
+        }
+
+        for (int i = 0; i < outputs.Count; i++)
+        {
+            if (outputs[i].HostLocation >= outputs.Count)
+            {
+                shader = default!;
+                error = "pixel output host locations must be dense in the 0..N-1 range";
+                return false;
+            }
         }
 
         var context = new CompilationContext(
