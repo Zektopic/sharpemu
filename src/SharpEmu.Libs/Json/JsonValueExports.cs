@@ -33,7 +33,7 @@ public static class JsonValueExports
     private static double ReadDoubleArg(CpuContext ctx)
     {
         ctx.GetXmmRegister(0, out var low, out _);
-        return BitConverter.Int64BitsToDouble(unchecked((long)low));
+        return BitConverter.UInt64BitsToDouble(low);
     }
 
     private static string ReadCString(CpuContext ctx, ulong address) =>
