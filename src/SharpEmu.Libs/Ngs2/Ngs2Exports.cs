@@ -23,6 +23,21 @@ public static class Ngs2Exports
     private static readonly Dictionary<ulong, SystemState> Systems = new();
     private static readonly Dictionary<ulong, RackState> Racks = new();
     private static readonly Dictionary<ulong, VoiceState> Voices = new();
+
+    /// <summary>
+    /// Cache to avoid allocations during system/rack removal.
+    /// This prevents allocating closures, enumerators, and arrays inside <see cref="Ngs2SystemDestroy"/>.
+    /// Safe to use as long as all usages occur while <see cref="StateGate"/> is locked.
+    /// </summary>
+    private static readonly List<ulong> _racksToRemove = new();
+
+    /// <summary>
+    /// Cache to avoid allocations during system/rack removal.
+    /// This prevents allocating closures, enumerators, and arrays inside <see cref="RemoveRackLocked"/>.
+    /// Separated from <see cref="_racksToRemove"/> to avoid reentrancy modification bugs when removing a system.
+    /// </summary>
+    private static readonly List<ulong> _voicesToRemove = new();
+
     private static long _nextUid;
     private static long _renderCount;
 
@@ -123,11 +138,16 @@ public static class Ngs2Exports
                 return SetReturn(ctx, OrbisNgs2ErrorInvalidSystemHandle);
             }
 
-            var rackHandles = Racks
-                .Where(pair => pair.Value.SystemHandle == handle)
-                .Select(pair => pair.Key)
-                .ToArray();
-            foreach (var rackHandle in rackHandles)
+            _racksToRemove.Clear();
+            foreach (var pair in Racks)
+            {
+                if (pair.Value.SystemHandle == handle)
+                {
+                    _racksToRemove.Add(pair.Key);
+                }
+            }
+
+            foreach (var rackHandle in _racksToRemove)
             {
                 RemoveRackLocked(rackHandle);
             }
@@ -891,10 +911,17 @@ public static class Ngs2Exports
     private static void RemoveRackLocked(ulong rackHandle)
     {
         Racks.Remove(rackHandle);
-        foreach (var voiceHandle in Voices
-                     .Where(pair => pair.Value.RackHandle == rackHandle)
-                     .Select(pair => pair.Key)
-                     .ToArray())
+
+        _voicesToRemove.Clear();
+        foreach (var pair in Voices)
+        {
+            if (pair.Value.RackHandle == rackHandle)
+            {
+                _voicesToRemove.Add(pair.Key);
+            }
+        }
+
+        foreach (var voiceHandle in _voicesToRemove)
         {
             Voices.Remove(voiceHandle);
         }
