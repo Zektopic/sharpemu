@@ -4732,7 +4732,7 @@ public static partial class KernelMemoryCompatExports
                 bits = ReadStackArg(_ctx, (ulong)(_stackIndex++) * 8);
             }
 
-            return BitConverter.Int64BitsToDouble(unchecked((long)bits));
+            return BitConverter.UInt64BitsToDouble(bits);
         }
     }
 
@@ -4796,7 +4796,7 @@ public static partial class KernelMemoryCompatExports
             }
 
             return TryReadUInt64Compat(_ctx, readAddress, out var rawBits)
-                ? BitConverter.Int64BitsToDouble(unchecked((long)rawBits))
+                ? BitConverter.UInt64BitsToDouble(rawBits)
                 : 0.0;
         }
 
