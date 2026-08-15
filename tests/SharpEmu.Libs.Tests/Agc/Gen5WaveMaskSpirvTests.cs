@@ -26,7 +26,7 @@ public sealed class Gen5WaveMaskSpirvTests
     private const ulong ShaderAddress = 0x1_0000_0000;
 
     [Fact]
-    public void WaveMaskPredicate_IsTestedAtCurrentLaneBit()
+    public void Opcode0_ScalarDest_PredicateIsLaneBitAndMask()
     {
         // V_CMP_EQ_F32 vcc, v0, v1 writes VCC at run time, which re-materialises
         // the per-lane _vcc predicate from the wave mask via IsWaveMaskActive.
