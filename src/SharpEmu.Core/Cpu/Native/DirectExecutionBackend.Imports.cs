@@ -2133,8 +2133,8 @@ public sealed partial class DirectExecutionBackend
 		var input = new byte[nameBytes.Length + salt.Length];
 		nameBytes.CopyTo(input, 0);
 		salt.CopyTo(input.AsSpan(nameBytes.Length));
-		Span<byte> digest = stackalloc byte[20];
-		SHA1.HashData(input, digest);
+		Span<byte> digest = stackalloc byte[32];
+		SHA256.HashData(input, digest);
 		var value = BinaryPrimitives.ReadUInt64LittleEndian(digest);
 		Span<byte> bigEndianValue = stackalloc byte[sizeof(ulong)];
 		BinaryPrimitives.WriteUInt64BigEndian(bigEndianValue, value);
