@@ -1198,7 +1198,7 @@ public static class AvPlayerExports
 
     internal static string? ResolveGuestPath(string guestPath)
     {
-        if (string.IsNullOrWhiteSpace(guestPath))
+        if (string.IsNullOrWhiteSpace(guestPath) || guestPath.Contains('"'))
         {
             return null;
         }
