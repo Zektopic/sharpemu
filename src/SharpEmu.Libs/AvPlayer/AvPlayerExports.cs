@@ -1372,7 +1372,7 @@ public static class AvPlayerExports
     }
 
     private static bool ContainsInvalidMediaPathCharacters(string path) =>
-        path.IndexOfAny(['?', '#']) >= 0 || path.Any(char.IsControl);
+        path.IndexOfAny(['?', '#', '"']) >= 0 || path.Any(char.IsControl);
 
     private static bool TryNormalizeApp0RelativePath(
         string guestPath,
