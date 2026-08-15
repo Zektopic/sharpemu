@@ -154,17 +154,17 @@ public sealed class PthreadMutexSemanticsTests
         Assert.Equal(0, KernelPthreadCompatExports.PthreadMutexLock(initializationContext));
         Assert.Equal(0, KernelPthreadCompatExports.PthreadMutexUnlock(initializationContext));
 
-        using var start = new ManualResetEventSlim(false);
+        var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var insideCriticalSection = 0;
         var mutualExclusionViolations = 0;
         var protectedCounter = 0;
         var workers = Enumerable.Range(0, workerCount)
-            .Select(_ => Task.Factory.StartNew(
-                () =>
+            .Select(_ => Task.Run(
+                async () =>
                 {
                     var context = new CpuContext(memory, Generation.Gen5);
                     context[CpuRegister.Rdi] = mutexAddress;
-                    start.Wait();
+                    await start.Task;
                     for (var iteration = 0; iteration < iterationsPerWorker; iteration++)
                     {
                         if (KernelPthreadCompatExports.PthreadMutexLock(context) != 0)
@@ -186,13 +186,10 @@ public sealed class PthreadMutexSemanticsTests
                             throw new InvalidOperationException("pthread mutex unlock failed during contention stress.");
                         }
                     }
-                },
-                CancellationToken.None,
-                TaskCreationOptions.LongRunning,
-                TaskScheduler.Default))
+                }))
             .ToArray();
 
-        start.Set();
+        start.SetResult();
         await Task.WhenAll(workers).WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(0, Volatile.Read(ref mutualExclusionViolations));
         Assert.Equal(workerCount * iterationsPerWorker, protectedCounter);
