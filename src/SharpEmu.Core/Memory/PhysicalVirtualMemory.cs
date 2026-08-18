@@ -1359,15 +1359,17 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         }
     }
 
+    /// <remarks>Performance optimization: Elides List bounds checking via CollectionsMarshal.AsSpan for O(1) direct memory access during hot path binary search lookups.</remarks>
     private MemoryRegion? FindRegion(ulong address, ulong size)
     {
+        var span = CollectionsMarshal.AsSpan(_regions);
         var low = 0;
-        var high = _regions.Count - 1;
+        var high = span.Length - 1;
         MemoryRegion? candidate = null;
         while (low <= high)
         {
-            var middle = low + ((high - low) >> 1);
-            var region = _regions[middle];
+            var middle = low + ((high - low) >>> 1);
+            var region = span[middle];
             if (region.VirtualAddress <= address)
             {
                 candidate = region;
