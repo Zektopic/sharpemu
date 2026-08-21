@@ -10,12 +10,17 @@ public sealed class VirtualMemory : IVirtualMemory
 {
     private readonly object _gate = new();
     private readonly List<MappedRegion> _regions = new();
+    private long _mappingGeneration;
+    private volatile SnapshotCache? _snapshotCache;
+
+    private sealed record SnapshotCache(long Generation, VirtualMemoryRegion[] Regions);
 
     public void Clear()
     {
         lock (_gate)
         {
             _regions.Clear();
+            _mappingGeneration++;
         }
     }
 
@@ -53,19 +58,29 @@ public sealed class VirtualMemory : IVirtualMemory
                 new VirtualMemoryRegion(virtualAddress, memorySize, fileOffset, (ulong)fileData.Length, protection),
                 endAddress,
                 backingMemory));
+            _mappingGeneration++;
         }
     }
 
+    /// <summary>Reduces GC pressure by caching the array snapshot based on mapping generation.</summary>
     public IReadOnlyList<VirtualMemoryRegion> SnapshotRegions()
     {
         lock (_gate)
         {
+            var currentGeneration = _mappingGeneration;
+            var cache = _snapshotCache;
+            if (cache != null && cache.Generation == currentGeneration)
+            {
+                return cache.Regions;
+            }
+
             var snapshot = new VirtualMemoryRegion[_regions.Count];
             for (var i = 0; i < _regions.Count; i++)
             {
                 snapshot[i] = _regions[i].Region;
             }
 
+            _snapshotCache = new SnapshotCache(currentGeneration, snapshot);
             return snapshot;
         }
     }

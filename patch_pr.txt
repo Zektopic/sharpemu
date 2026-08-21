@@ -1,0 +1,22 @@
+⚡ Bolt: Eliminate GC allocation in SnapshotRegions hot path
+
+### 💡 What
+Implemented a generational cache (via `SnapshotCache` record) in `PhysicalVirtualMemory.SnapshotRegions()` and `VirtualMemory.SnapshotRegions()`. This completely eliminates the per-call allocation of `VirtualMemoryRegion[]` arrays when the underlying memory mappings have not changed.
+
+### 🎯 Subsystem & Bottleneck
+- **Subsystem:** Guest MMU & Memory Subsystem (16 KB Pages / Unified Memory)
+- **Target File(s):** `src/SharpEmu.Core/Memory/PhysicalVirtualMemory.cs`, `src/SharpEmu.Core/Memory/VirtualMemory.cs`
+- **Bottleneck Addressed:** Repeated garbage collection pressure and CPU instruction overhead from allocating and iterating a new array of `VirtualMemoryRegion` on every call to `SnapshotRegions()`, which is deeply relied upon by hot path checks like `DirectExecutionBackend.ContainsAddress` via `IsGuestOwnedLazyCommitAddress`.
+
+### 📜 Git & Contributor Context
+- **Recent File History:** Checked git log for `src/SharpEmu.Core/Memory/PhysicalVirtualMemory.cs` (last change was a merge 14 days ago).
+- **Conflict Check:** Verified change does not conflict with active work and hasn't been reverted before.
+
+### 📊 Measured Performance Impact
+- **Allocation Delta:** Reduced from O(N) array allocation to 0 B/call (when mappings are unchanged).
+
+### 🔬 Verification Checklist
+- [x] Executed `dotnet test` (All tests passed)
+- [x] Verified zero unexpected allocations in hot path
+- [x] Verified formatting with `dotnet format`
+- [x] Confirmed thread safety and emulation accuracy
