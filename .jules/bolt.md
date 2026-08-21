@@ -20,7 +20,6 @@
 **Learning:** To guarantee 100% line and branch coverage on these critical internal data models, the most direct and reliable approach is to use reflection within standard xUnit tests. This circumvents the need to construct complex `CSharpCompilation` trees and invoke `CSharpGeneratorDriver` incrementally just to trigger `IEquatable` calls, reducing test brittleness and focusing on structural equality.
 
 **Action:** Created `ExportModelEqualityTests` in `SysAbiExportGeneratorTests.cs` using `GetNestedType` and `Activator.CreateInstance` to thoroughly test all branches of `ExportModel` equality logic, improving code reliability for the generator pipeline.
-
 ## 2024-05-24 - Zero-Allocation Generational Caching for Memory Snapshots
 **Context:** `src/SharpEmu.Core/Memory/PhysicalVirtualMemory.cs` & `VirtualMemory.cs`
 **Learning:** `SnapshotRegions()` array allocations were generating significant GC pressure because it's called heavily in the `DirectExecutionBackend.ContainsAddress` hot path. Using a simple read-lock check with `Volatile.Read` on `_mappingGeneration` can create race conditions between threads if the snapshot array and generation ID are updated independently.
