@@ -27,12 +27,53 @@ internal sealed unsafe partial class WindowsHostMemory : IHostMemory
 
     public ulong Allocate(ulong desiredAddress, ulong size, HostPageProtection protection)
     {
-        return (ulong)VirtualAlloc((void*)desiredAddress, (nuint)size, MEM_COMMIT | MEM_RESERVE, ToNativeProtection(protection));
+        var ptr = VirtualAlloc((void*)desiredAddress, (nuint)size, MEM_COMMIT | MEM_RESERVE, ToNativeProtection(protection));
+        if (ptr != null)
+        {
+            return (ulong)ptr;
+        }
+
+        if (desiredAddress != 0)
+        {
+            if (VirtualAlloc((void*)desiredAddress, (nuint)size, MEM_COMMIT, ToNativeProtection(protection)) != null)
+            {
+                return desiredAddress;
+            }
+
+            const ulong Granularity = 0x10000;
+            var alignedBase = desiredAddress & ~(Granularity - 1);
+            var alignedEnd = (desiredAddress + size + 0xFFF) & ~0xFFFUL;
+            var alignedSize = alignedEnd - alignedBase;
+            if (VirtualAlloc((void*)alignedBase, (nuint)alignedSize, MEM_COMMIT | MEM_RESERVE, ToNativeProtection(protection)) != null)
+            {
+                return desiredAddress;
+            }
+        }
+
+        return 0;
     }
 
     public ulong Reserve(ulong desiredAddress, ulong size, HostPageProtection protection)
     {
-        return (ulong)VirtualAlloc((void*)desiredAddress, (nuint)size, MEM_RESERVE, ToNativeProtection(protection));
+        var ptr = VirtualAlloc((void*)desiredAddress, (nuint)size, MEM_RESERVE, ToNativeProtection(protection));
+        if (ptr != null)
+        {
+            return (ulong)ptr;
+        }
+
+        if (desiredAddress != 0)
+        {
+            const ulong Granularity = 0x10000;
+            var alignedBase = desiredAddress & ~(Granularity - 1);
+            var alignedEnd = (desiredAddress + size + 0xFFF) & ~0xFFFUL;
+            var alignedSize = alignedEnd - alignedBase;
+            if (VirtualAlloc((void*)alignedBase, (nuint)alignedSize, MEM_RESERVE, ToNativeProtection(protection)) != null)
+            {
+                return desiredAddress;
+            }
+        }
+
+        return 0;
     }
 
     public bool Commit(ulong address, ulong size, HostPageProtection protection)
