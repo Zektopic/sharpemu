@@ -581,8 +581,9 @@ public sealed partial class DirectExecutionBackend
 				}
 			}
 		}
-		catch
+		catch (Exception ex)
 		{
+			Log.Error($"Failed to search guest threads by host thread ID {hostThreadId}", ex);
 		}
 
 		return null;
