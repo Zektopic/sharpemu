@@ -2123,26 +2123,19 @@ public sealed class SelfLoader : ISelfLoader
 
     private static ulong CalculateTotalImageSize(IReadOnlyList<ProgramHeader> programHeaders)
     {
-        ulong minAddr = ulong.MaxValue;
         ulong maxAddr = 0;
 
         foreach (var header in programHeaders)
         {
             if (header.HeaderType == ProgramHeaderType.Load && header.MemorySize > 0)
             {
-                if (header.VirtualAddress < minAddr)
-                    minAddr = header.VirtualAddress;
-
                 var endAddr = header.VirtualAddress + header.MemorySize;
                 if (endAddr > maxAddr)
                     maxAddr = endAddr;
             }
         }
 
-        if (minAddr == ulong.MaxValue)
-            return 0;
-
-        return maxAddr - minAddr;
+        return maxAddr;
     }
 
     private static ulong ComputeImageBase(IReadOnlyList<ProgramHeader> programHeaders)
