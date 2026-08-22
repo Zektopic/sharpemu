@@ -837,8 +837,12 @@ public sealed partial class DirectExecutionBackend
 			{
 				SignalWorkAvailable();
 			}
-			catch (ObjectDisposedException)
+			catch (ObjectDisposedException ex)
 			{
+				// The synchronization event handle (_workAvailable / _workSemaphore) may be disposed
+				// before or concurrently with the native guest worker executor teardown. Log the expected
+				// disposal exception at debug level to retain visibility while allowing cleanup to proceed.
+				Log.Debug($"Work available signal handle was already disposed during native worker disposal: {ex.Message}");
 			}
 			var exited = _threadHandle == 0;
 			if (_threadHandle != 0)
