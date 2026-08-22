@@ -20,3 +20,8 @@
 **Learning:** To guarantee 100% line and branch coverage on these critical internal data models, the most direct and reliable approach is to use reflection within standard xUnit tests. This circumvents the need to construct complex `CSharpCompilation` trees and invoke `CSharpGeneratorDriver` incrementally just to trigger `IEquatable` calls, reducing test brittleness and focusing on structural equality.
 
 **Action:** Created `ExportModelEqualityTests` in `SysAbiExportGeneratorTests.cs` using `GetNestedType` and `Activator.CreateInstance` to thoroughly test all branches of `ExportModel` equality logic, improving code reliability for the generator pipeline.
+
+## 2024-05-18 - Optimize PhysicalVirtualMemory FindRegion Bottleneck
+**Context:** `src/SharpEmu.Core/Memory/PhysicalVirtualMemory.cs`
+**Learning:** The `List<T>` indexer inside the `FindRegion` binary search hot path incurred bounds-checking and method-call overhead. Accessing it via `CollectionsMarshal.AsSpan` yielded a measurable decrease in execution time on millions of iterations.
+**Action:** Use `CollectionsMarshal.AsSpan` for hot path reads of `List<T>` instead of indexers when zero-allocation and bounds-checking elision is needed.
