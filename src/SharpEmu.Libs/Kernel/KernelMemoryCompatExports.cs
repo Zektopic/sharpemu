@@ -4,6 +4,7 @@
 using SharpEmu.HLE;
 using SharpEmu.Libs.Ampr;
 using SharpEmu.Libs.Bink;
+using SharpEmu.Libs.Utils;
 using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
@@ -5393,8 +5394,7 @@ public static partial class KernelMemoryCompatExports
             appName = "default";
         }
 
-        var invalidChars = Path.GetInvalidFileNameChars();
-        appName = new string(appName.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray());
+        appName = PathSanitizer.SanitizeFileName(appName);
         var root = Path.Combine(Path.GetTempPath(), "SharpEmu", appName, "temp0");
         Environment.SetEnvironmentVariable(temp0VariableName, root);
         return root;
@@ -5462,8 +5462,7 @@ public static partial class KernelMemoryCompatExports
             appName = "default";
         }
 
-        var invalidChars = Path.GetInvalidFileNameChars();
-        appName = new string(appName.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray());
+        appName = PathSanitizer.SanitizeFileName(appName);
         return Path.Combine(Path.GetTempPath(), "SharpEmu", appName);
     }
 
