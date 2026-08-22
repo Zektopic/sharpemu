@@ -9316,12 +9316,16 @@ public static partial class AgcExports
     private static int _tracedAstroTitlePixelGlobals;
     private static int _tracedAstroTitlePixelGlobalProbe;
 
+    /// <summary>
+    /// Traces Astro Title pixel global probes using indexed iteration to eliminate LINQ closure and tuple heap allocations per loop iteration.
+    /// </summary>
     private static void TraceAstroTitlePixelGlobalProbe(Gen5ShaderEvaluation evaluation)
     {
         const int probeOffset = 17216;
         var draw = Interlocked.Increment(ref _tracedAstroTitlePixelGlobalProbe);
-        foreach (var (binding, index) in evaluation.GlobalMemoryBindings.Select((value, index) => (value, index)))
+        for (var index = 0; index < evaluation.GlobalMemoryBindings.Count; index++)
         {
+            var binding = evaluation.GlobalMemoryBindings[index];
             if (probeOffset + 16 > binding.DataLength)
             {
                 continue;
