@@ -1,9 +1,10 @@
-﻿// Copyright (C) 2026 SharpEmu Emulator Project
+// Copyright (C) 2026 SharpEmu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 using SharpEmu.HLE;
 using System.Buffers.Binary;
 using System.Text.RegularExpressions;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace SharpEmu.Libs.PlayGo;
@@ -771,7 +772,14 @@ public static class PlayGoExports
         try
         {
             var xml = File.ReadAllText(chunkDefsXml);
-            _ = XDocument.Parse(xml, LoadOptions.None);
+            var settings = new XmlReaderSettings
+            {
+                DtdProcessing = DtdProcessing.Prohibit,
+                XmlResolver = null
+            };
+            using var stringReader = new StringReader(xml);
+            using var xmlReader = XmlReader.Create(stringReader, settings);
+            _ = XDocument.Load(xmlReader);
 
             var chunkIds = new HashSet<ushort>();
             AddChunkIds(xml, DefaultChunkPattern, chunkIds);
