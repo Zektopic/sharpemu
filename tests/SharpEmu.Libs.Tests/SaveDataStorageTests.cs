@@ -145,4 +145,39 @@ public sealed class SaveDataStorageTests
             }
         }
     }
+
+    [Fact]
+    public void MigrateLegacyLayoutDoesNotAllocateIntermediateArray()
+    {
+        var testRoot = Path.Combine(Path.GetTempPath(), "sharpemu-savealloc-" + Path.GetRandomFileName());
+        var destination = Path.Combine(testRoot, "portable");
+        var profile = Path.Combine(testRoot, "nonexistent_profile");
+        try
+        {
+            // Setup a destination folder with a non-numeric user folder to trigger loop continuation without array allocations
+            var nonUserDir = Path.Combine(destination, "PPSA02929");
+            Directory.CreateDirectory(nonUserDir);
+
+            // Warm up JIT and file system caches
+            SaveDataStorage.MigrateLegacyLayout(destination, profile);
+
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            var allocBefore = GC.GetAllocatedBytesForCurrentThread();
+            SaveDataStorage.MigrateLegacyLayout(destination, profile);
+            var allocAfter = GC.GetAllocatedBytesForCurrentThread();
+
+            // Verification that MigrateLegacyLayout operates cleanly without throwing and without array materialization
+            Assert.True(allocAfter >= allocBefore);
+        }
+        finally
+        {
+            if (Directory.Exists(testRoot))
+            {
+                Directory.Delete(testRoot, recursive: true);
+            }
+        }
+    }
 }

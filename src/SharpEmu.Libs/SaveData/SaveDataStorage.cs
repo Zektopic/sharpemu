@@ -50,7 +50,8 @@ public static class SaveDataStorage
             return;
         }
 
-        foreach (var userRoot in Directory.EnumerateDirectories(destinationRoot).ToArray())
+        // Lazy directory enumeration avoids allocating an intermediate string array on the heap.
+        foreach (var userRoot in Directory.EnumerateDirectories(destinationRoot))
         {
             if (!uint.TryParse(Path.GetFileName(userRoot), out _))
             {
