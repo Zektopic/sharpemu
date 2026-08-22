@@ -334,6 +334,14 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         // non-executable commit cannot be satisfied (see TryAllocateAtExact).
         ulong result = _hostMemory.Allocate(desiredAddress, alignedSize, hostProtection);
 
+        if (result == 0 && desiredAddress != 0)
+        {
+            if (_hostMemory.Commit(desiredAddress, alignedSize, hostProtection))
+            {
+                result = desiredAddress;
+            }
+        }
+
         if (result == 0)
         {
             if (!allowAlternative)
@@ -502,11 +510,22 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
                 stagedAllocations.Add((cursor, runSize));
                 TraceVmem($"Backed fixed range gap: 0x{cursor:X16} - 0x{runEnd:X16} ({runSize} bytes)");
             }
+            else if (info.State == HostRegionState.Reserved)
+            {
+                var runSize = runEnd - cursor;
+                if (!_hostMemory.Commit(cursor, runSize, hostProtection))
+                {
+                    goto Rollback;
+                }
+
+                stagedAllocations.Add((cursor, runSize));
+                TraceVmem($"Committed fixed range reserved gap: 0x{cursor:X16} - 0x{runEnd:X16} ({runSize} bytes)");
+            }
 
             cursor = runEnd;
         }
 
-        if (stagedAllocations.Count == 0)
+        if (stagedAllocations.Count == 0 && cursor < end)
         {
             return false;
         }
