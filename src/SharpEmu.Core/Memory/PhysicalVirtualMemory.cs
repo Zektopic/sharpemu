@@ -584,8 +584,9 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
                     ReleaseUntrackedAllocation(posixAddress);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                TraceVmem($"Failed allocation attempt at 0x{cursor:X16}: {ex.Message}");
             }
 
             return false;
