@@ -63,12 +63,8 @@ public static class Updater
         IProgress<int>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        var root = Path.Combine(Path.GetTempPath(), "SharpEmu.Update");
+        var root = Path.Combine(Path.GetTempPath(), $"SharpEmu.Update-{Guid.NewGuid():N}");
         var payload = Path.Combine(root, "payload");
-        if (Directory.Exists(root))
-        {
-            Directory.Delete(root, recursive: true);
-        }
 
         var launched = false;
         try
