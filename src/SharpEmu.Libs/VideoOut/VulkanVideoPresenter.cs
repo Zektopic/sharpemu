@@ -2555,8 +2555,6 @@ internal static unsafe class VulkanVideoPresenter
         return false;
     }
 
-    private static long _tracedAvPlayerFallbackPresentationSerial;
-    private static long _avPlayerFallbackPresentationCount;
     private static readonly HashSet<long> _tracedGuestImagePresentRejections = new();
 
 	private static bool HasPendingGuestPresentation(long presentedSequence)
