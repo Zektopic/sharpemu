@@ -1124,63 +1124,63 @@ public static class Gen5ShaderTranslator
                 _ => $"Vop3bRaw{opcode:X3}",
             }
             : opcode switch
-        {
-            0x101 => "VCndmaskB32",
-            0x103 => "VAddF32",
-            0x104 => "VSubF32",
-            0x108 => "VMulF32",
-            0x10F => "VMinF32",
-            0x110 => "VMaxF32",
-            0x11F => "VMacF32",
-            0x12B => "VFmacF32",
-            0x12F => "VCvtPkrtzF16F32",
-            0x141 => "VMadF32",
-            0x143 => "VMadU32U24",
-            0x144 => "VCubeidF32",
-            0x145 => "VCubescF32",
-            0x146 => "VCubetcF32",
-            0x147 => "VCubemaF32",
-            0x14A => "VBfiB32",
-            0x14B => "VFmaF32",
-            0x151 => "VMin3F32",
-            0x152 => "VMin3I32",
-            0x153 => "VMin3U32",
-            0x154 => "VMax3F32",
-            0x155 => "VMax3I32",
-            0x156 => "VMax3U32",
-            0x157 => "VMed3F32",
-            0x158 => "VMed3I32",
-            0x159 => "VMed3U32",
-            0x15A => "VSadU8",
-            0x15B => "VSadHiU8",
-            0x15C => "VSadU16",
-            0x15D => "VSadU32",
-            0x15E => "VCvtPkU8F32",
-            0x148 => "VBfeU32",
-            0x169 => "VMulLoU32",
-            0x16A => "VMulHiU32",
-            0x16B => "VMulLoI32",
-            0x16C => "VMulHiI32",
-            0x360 => "VReadlaneB32",
-            0x361 => "VWritelaneB32",
-            0x362 => "VLdexpF32",
-            0x363 => "VBfmB32",
-            0x364 => "VBcntU32B32",
-            0x365 => "VMbcntLoU32B32",
-            0x366 => "VMbcntHiU32B32",
-            0x368 => "VCvtPknormI16F32",
-            0x369 => "VCvtPknormU16F32",
-            0x373 => "VMadU32U16",
-            0x346 => "VLshlAddU32",
-            0x347 => "VAddLshlU32",
-            0x36D => "VAdd3U32",
-            0x36F => "VLshlOrU32",
-            0x371 => "VAndOrB32",
-            0x372 => "VOr3U32",
-            0x377 => "VPermlane16B32",
-            0x378 => "VPermlanex16B32",
-            _ => $"Vop3Raw{opcode:X3}",
-        };
+            {
+                0x101 => "VCndmaskB32",
+                0x103 => "VAddF32",
+                0x104 => "VSubF32",
+                0x108 => "VMulF32",
+                0x10F => "VMinF32",
+                0x110 => "VMaxF32",
+                0x11F => "VMacF32",
+                0x12B => "VFmacF32",
+                0x12F => "VCvtPkrtzF16F32",
+                0x141 => "VMadF32",
+                0x143 => "VMadU32U24",
+                0x144 => "VCubeidF32",
+                0x145 => "VCubescF32",
+                0x146 => "VCubetcF32",
+                0x147 => "VCubemaF32",
+                0x14A => "VBfiB32",
+                0x14B => "VFmaF32",
+                0x151 => "VMin3F32",
+                0x152 => "VMin3I32",
+                0x153 => "VMin3U32",
+                0x154 => "VMax3F32",
+                0x155 => "VMax3I32",
+                0x156 => "VMax3U32",
+                0x157 => "VMed3F32",
+                0x158 => "VMed3I32",
+                0x159 => "VMed3U32",
+                0x15A => "VSadU8",
+                0x15B => "VSadHiU8",
+                0x15C => "VSadU16",
+                0x15D => "VSadU32",
+                0x15E => "VCvtPkU8F32",
+                0x148 => "VBfeU32",
+                0x169 => "VMulLoU32",
+                0x16A => "VMulHiU32",
+                0x16B => "VMulLoI32",
+                0x16C => "VMulHiI32",
+                0x360 => "VReadlaneB32",
+                0x361 => "VWritelaneB32",
+                0x362 => "VLdexpF32",
+                0x363 => "VBfmB32",
+                0x364 => "VBcntU32B32",
+                0x365 => "VMbcntLoU32B32",
+                0x366 => "VMbcntHiU32B32",
+                0x368 => "VCvtPknormI16F32",
+                0x369 => "VCvtPknormU16F32",
+                0x373 => "VMadU32U16",
+                0x346 => "VLshlAddU32",
+                0x347 => "VAddLshlU32",
+                0x36D => "VAdd3U32",
+                0x36F => "VLshlOrU32",
+                0x371 => "VAndOrB32",
+                0x372 => "VOr3U32",
+                0x377 => "VPermlane16B32",
+                0x378 => "VPermlanex16B32",
+                _ => $"Vop3Raw{opcode:X3}",
+            };
 
         return FinishDecode(name, $"unknown-vop3 op=0x{opcode:X3}", out error);
     }
@@ -1622,7 +1622,7 @@ public static class Gen5ShaderTranslator
 
     public static bool RequiresStorageImage(
         Gen5ImageBinding binding,
-        IReadOnlyList<Gen5ImageBinding> stageBindings)
+        IEnumerable<Gen5ImageBinding> stageBindings)
     {
         if (IsStorageImageOperation(binding.Opcode))
         {
@@ -1787,68 +1787,68 @@ public static class Gen5ShaderTranslator
                 destinations = [Gen5Operand.Scalar((word >> 16) & 0x7F)];
                 break;
             case Gen5ShaderEncoding.Smrd:
-            {
-                var scalarBase = ((word >> 9) & 0x3F) * 2;
-                var scalarDestination = (word >> 15) & 0x7F;
-                var immediate = ((word >> 8) & 1) != 0;
-                var offset = word & 0xFF;
-                var count = ScalarLoadDwordCount(opcode);
-                uint? dynamicOffsetRegister = null;
-                var immediateOffsetBytes = 0;
-                if (immediate)
                 {
-                    immediateOffsetBytes = checked((int)(offset * sizeof(uint)));
-                }
-                else if (offset == 0xFF && literal.HasValue)
-                {
-                    immediateOffsetBytes = unchecked((int)literal.Value);
-                }
-                else
-                {
-                    dynamicOffsetRegister = offset;
-                }
+                    var scalarBase = ((word >> 9) & 0x3F) * 2;
+                    var scalarDestination = (word >> 15) & 0x7F;
+                    var immediate = ((word >> 8) & 1) != 0;
+                    var offset = word & 0xFF;
+                    var count = ScalarLoadDwordCount(opcode);
+                    uint? dynamicOffsetRegister = null;
+                    var immediateOffsetBytes = 0;
+                    if (immediate)
+                    {
+                        immediateOffsetBytes = checked((int)(offset * sizeof(uint)));
+                    }
+                    else if (offset == 0xFF && literal.HasValue)
+                    {
+                        immediateOffsetBytes = unchecked((int)literal.Value);
+                    }
+                    else
+                    {
+                        dynamicOffsetRegister = offset;
+                    }
 
-                sources = dynamicOffsetRegister.HasValue
-                    ? [Gen5Operand.Scalar(scalarBase), Gen5Operand.Scalar(dynamicOffsetRegister.Value)]
-                    : [Gen5Operand.Scalar(scalarBase)];
-                destinations = Enumerable
-                    .Range((int)scalarDestination, checked((int)count))
-                    .Select(index => Gen5Operand.Scalar((uint)index))
-                    .ToArray();
-                control = new Gen5ScalarMemoryControl(
-                    count,
-                    immediateOffsetBytes,
-                    dynamicOffsetRegister);
-                break;
-            }
+                    sources = dynamicOffsetRegister.HasValue
+                        ? [Gen5Operand.Scalar(scalarBase), Gen5Operand.Scalar(dynamicOffsetRegister.Value)]
+                        : [Gen5Operand.Scalar(scalarBase)];
+                    destinations = Enumerable
+                        .Range((int)scalarDestination, checked((int)count))
+                        .Select(index => Gen5Operand.Scalar((uint)index))
+                        .ToArray();
+                    control = new Gen5ScalarMemoryControl(
+                        count,
+                        immediateOffsetBytes,
+                        dynamicOffsetRegister);
+                    break;
+                }
             case Gen5ShaderEncoding.Smem:
-            {
-                var extra = words[1];
-                var scalarBase = (word & 0x3F) * 2;
-                var scalarDestination = (word >> 6) & 0x7F;
-                var scalarOffset = (extra >> 25) & 0x7F;
-                var offset = SignExtend(extra & 0x1FFFFF, 21);
-                var count = ScalarLoadDwordCount(opcode);
-                var scalarOffsetOperand = Gen5Operand.Source(scalarOffset);
-                var dynamicOffsetRegister = scalarOffsetOperand.Kind ==
-                    Gen5OperandKind.ScalarRegister
-                    ? scalarOffsetOperand.Value
-                    : (uint?)null;
-                sources =
-                [
-                    Gen5Operand.Scalar(scalarBase),
+                {
+                    var extra = words[1];
+                    var scalarBase = (word & 0x3F) * 2;
+                    var scalarDestination = (word >> 6) & 0x7F;
+                    var scalarOffset = (extra >> 25) & 0x7F;
+                    var offset = SignExtend(extra & 0x1FFFFF, 21);
+                    var count = ScalarLoadDwordCount(opcode);
+                    var scalarOffsetOperand = Gen5Operand.Source(scalarOffset);
+                    var dynamicOffsetRegister = scalarOffsetOperand.Kind ==
+                        Gen5OperandKind.ScalarRegister
+                        ? scalarOffsetOperand.Value
+                        : (uint?)null;
+                    sources =
+                    [
+                        Gen5Operand.Scalar(scalarBase),
                     scalarOffsetOperand,
                 ];
-                destinations = Enumerable
-                    .Range((int)scalarDestination, checked((int)count))
-                    .Select(index => Gen5Operand.Scalar((uint)index))
-                    .ToArray();
-                control = new Gen5ScalarMemoryControl(
-                    count,
-                    offset,
-                    dynamicOffsetRegister);
-                break;
-            }
+                    destinations = Enumerable
+                        .Range((int)scalarDestination, checked((int)count))
+                        .Select(index => Gen5Operand.Scalar((uint)index))
+                        .ToArray();
+                    control = new Gen5ScalarMemoryControl(
+                        count,
+                        offset,
+                        dynamicOffsetRegister);
+                    break;
+                }
             case Gen5ShaderEncoding.Vop1:
                 if (isDpp8)
                 {
@@ -2005,136 +2005,136 @@ public static class Gen5ShaderTranslator
                 }
                 break;
             case Gen5ShaderEncoding.Vop3:
-            {
-                var extra = words[1];
-                sources =
-                [
-                    Gen5Operand.Source(extra & 0x1FF, literal),
+                {
+                    var extra = words[1];
+                    sources =
+                    [
+                        Gen5Operand.Source(extra & 0x1FF, literal),
                     Gen5Operand.Source((extra >> 9) & 0x1FF, literal),
                     Gen5Operand.Source((extra >> 18) & 0x1FF, literal),
                 ];
-                destinations = [Gen5Operand.Vector(word & 0xFF)];
-                if (opcode == "VReadlaneB32")
-                {
-                    // V_READLANE uses the VOP3A vdst byte even though the
-                    // destination register is scalar. Bits 8-14 are the
-                    // distinct sdst field used by VOP3B encodings.
-                    destinations = [Gen5Operand.Scalar(word & 0xFF)];
+                    destinations = [Gen5Operand.Vector(word & 0xFF)];
+                    if (opcode == "VReadlaneB32")
+                    {
+                        // V_READLANE uses the VOP3A vdst byte even though the
+                        // destination register is scalar. Bits 8-14 are the
+                        // distinct sdst field used by VOP3B encodings.
+                        destinations = [Gen5Operand.Scalar(word & 0xFF)];
+                    }
+                    var isVop3B = IsVop3BOpcode((word >> 16) & 0x3FF);
+                    control = new Gen5Vop3Control(
+                        isVop3B ? 0 : (word >> 8) & 0x7,
+                        (extra >> 29) & 0x7,
+                        (extra >> 27) & 0x3,
+                        ((word >> 15) & 1) != 0,
+                        isVop3B ? 0 : (word >> 11) & 0xF,
+                        isVop3B ? (word >> 8) & 0x7F : null);
+                    break;
                 }
-                var isVop3B = IsVop3BOpcode((word >> 16) & 0x3FF);
-                control = new Gen5Vop3Control(
-                    isVop3B ? 0 : (word >> 8) & 0x7,
-                    (extra >> 29) & 0x7,
-                    (extra >> 27) & 0x3,
-                    ((word >> 15) & 1) != 0,
-                    isVop3B ? 0 : (word >> 11) & 0xF,
-                    isVop3B ? (word >> 8) & 0x7F : null);
-                break;
-            }
             case Gen5ShaderEncoding.Vop3p:
-            {
-                var extra = words[1];
-                sources =
-                [
-                    Gen5Operand.Source(extra & 0x1FF, literal),
+                {
+                    var extra = words[1];
+                    sources =
+                    [
+                        Gen5Operand.Source(extra & 0x1FF, literal),
                     Gen5Operand.Source((extra >> 9) & 0x1FF, literal),
                     Gen5Operand.Source((extra >> 18) & 0x1FF, literal),
                 ];
-                destinations = [Gen5Operand.Vector(word & 0xFF)];
+                    destinations = [Gen5Operand.Vector(word & 0xFF)];
 
-                // op_sel_hi is split across both dwords: bits [1:0] live in word1
-                // [28:27], bit [2] in word0 [14].
-                var opSelHi = ((extra >> 27) & 0x3) | (((word >> 14) & 0x1) << 2);
-                control = new Gen5Vop3pControl(
-                    (word >> 11) & 0x7,
-                    opSelHi,
-                    (extra >> 29) & 0x7,
-                    (word >> 8) & 0x7,
-                    ((word >> 15) & 1) != 0);
-                break;
-            }
+                    // op_sel_hi is split across both dwords: bits [1:0] live in word1
+                    // [28:27], bit [2] in word0 [14].
+                    var opSelHi = ((extra >> 27) & 0x3) | (((word >> 14) & 0x1) << 2);
+                    control = new Gen5Vop3pControl(
+                        (word >> 11) & 0x7,
+                        opSelHi,
+                        (extra >> 29) & 0x7,
+                        (word >> 8) & 0x7,
+                        ((word >> 15) & 1) != 0);
+                    break;
+                }
             case Gen5ShaderEncoding.Ds:
-            {
-                var extra = words[1];
-                var vectorAddress = extra & 0xFF;
-                var vectorData0 = (extra >> 8) & 0xFF;
-                var vectorData1 = (extra >> 16) & 0xFF;
-                var vectorDestination = (extra >> 24) & 0xFF;
-                control = new Gen5DataShareControl(
-                    word & 0xFF,
-                    (word >> 8) & 0xFF,
-                    ((word >> 17) & 1) != 0);
-                sources = opcode switch
                 {
-                    "DsWriteB32" => [
-                        Gen5Operand.Vector(vectorAddress),
+                    var extra = words[1];
+                    var vectorAddress = extra & 0xFF;
+                    var vectorData0 = (extra >> 8) & 0xFF;
+                    var vectorData1 = (extra >> 16) & 0xFF;
+                    var vectorDestination = (extra >> 24) & 0xFF;
+                    control = new Gen5DataShareControl(
+                        word & 0xFF,
+                        (word >> 8) & 0xFF,
+                        ((word >> 17) & 1) != 0);
+                    sources = opcode switch
+                    {
+                        "DsWriteB32" => [
+                            Gen5Operand.Vector(vectorAddress),
                         Gen5Operand.Vector(vectorData0),
                     ],
-                    "DsWriteB64" => [
-                        Gen5Operand.Vector(vectorAddress),
+                        "DsWriteB64" => [
+                            Gen5Operand.Vector(vectorAddress),
                         Gen5Operand.Vector(vectorData0),
                         Gen5Operand.Vector(vectorData0 + 1),
                     ],
-                    "DsWriteB96" => [
-                        Gen5Operand.Vector(vectorAddress),
+                        "DsWriteB96" => [
+                            Gen5Operand.Vector(vectorAddress),
                         Gen5Operand.Vector(vectorData0),
                         Gen5Operand.Vector(vectorData0 + 1),
                         Gen5Operand.Vector(vectorData0 + 2),
                     ],
-                    "DsWriteB128" => [
-                        Gen5Operand.Vector(vectorAddress),
+                        "DsWriteB128" => [
+                            Gen5Operand.Vector(vectorAddress),
                         Gen5Operand.Vector(vectorData0),
                         Gen5Operand.Vector(vectorData0 + 1),
                         Gen5Operand.Vector(vectorData0 + 2),
                         Gen5Operand.Vector(vectorData0 + 3),
                     ],
-                    "DsWrite2B32" or "DsWrite2St64B32" => [
-                        Gen5Operand.Vector(vectorAddress),
+                        "DsWrite2B32" or "DsWrite2St64B32" => [
+                            Gen5Operand.Vector(vectorAddress),
                         Gen5Operand.Vector(vectorData0),
                         Gen5Operand.Vector(vectorData1),
                     ],
-                    "DsSwizzleB32" => [Gen5Operand.Vector(vectorData0)],
-                    // DS_CMPST operand order is reversed vs buffer/image cmpswap:
-                    // DATA0 holds the comparator, DATA1 holds the new value.
-                    "DsCmpstB32" or "DsCmpstRtnB32" => [
-                        Gen5Operand.Vector(vectorAddress),
+                        "DsSwizzleB32" => [Gen5Operand.Vector(vectorData0)],
+                        // DS_CMPST operand order is reversed vs buffer/image cmpswap:
+                        // DATA0 holds the comparator, DATA1 holds the new value.
+                        "DsCmpstB32" or "DsCmpstRtnB32" => [
+                            Gen5Operand.Vector(vectorAddress),
                         Gen5Operand.Vector(vectorData0),
                         Gen5Operand.Vector(vectorData1),
                     ],
-                    _ when IsDataShareAtomic(opcode) => [
-                        Gen5Operand.Vector(vectorAddress),
+                        _ when IsDataShareAtomic(opcode) => [
+                            Gen5Operand.Vector(vectorAddress),
                         Gen5Operand.Vector(vectorData0),
                     ],
-                    _ => [Gen5Operand.Vector(vectorAddress)],
-                };
-                destinations = opcode switch
-                {
-                    "DsReadB32" or "DsSwizzleB32" => [
-                        Gen5Operand.Vector(vectorDestination),
+                        _ => [Gen5Operand.Vector(vectorAddress)],
+                    };
+                    destinations = opcode switch
+                    {
+                        "DsReadB32" or "DsSwizzleB32" => [
+                            Gen5Operand.Vector(vectorDestination),
                     ],
-                    "DsRead2B32" or "DsRead2St64B32" => [
-                        Gen5Operand.Vector(vectorDestination),
+                        "DsRead2B32" or "DsRead2St64B32" => [
+                            Gen5Operand.Vector(vectorDestination),
                         Gen5Operand.Vector(vectorDestination + 1),
                     ],
-                    "DsReadB96" => [
-                        Gen5Operand.Vector(vectorDestination),
+                        "DsReadB96" => [
+                            Gen5Operand.Vector(vectorDestination),
                         Gen5Operand.Vector(vectorDestination + 1),
                         Gen5Operand.Vector(vectorDestination + 2),
                     ],
-                    "DsReadB128" => [
-                        Gen5Operand.Vector(vectorDestination),
+                        "DsReadB128" => [
+                            Gen5Operand.Vector(vectorDestination),
                         Gen5Operand.Vector(vectorDestination + 1),
                         Gen5Operand.Vector(vectorDestination + 2),
                         Gen5Operand.Vector(vectorDestination + 3),
                     ],
-                    _ when IsDataShareAtomic(opcode) &&
-                        opcode.Contains("Rtn", StringComparison.Ordinal) => [
-                        Gen5Operand.Vector(vectorDestination),
-                    ],
-                    _ => [],
-                };
-                break;
-            }
+                        _ when IsDataShareAtomic(opcode) &&
+                            opcode.Contains("Rtn", StringComparison.Ordinal) => [
+                            Gen5Operand.Vector(vectorDestination),
+                        ],
+                        _ => [],
+                    };
+                    break;
+                }
             case Gen5ShaderEncoding.Vintrp:
                 sources = [Gen5Operand.Vector(word & 0xFF)];
                 destinations = [Gen5Operand.Vector((word >> 18) & 0xFF)];
@@ -2143,242 +2143,242 @@ public static class Gen5ShaderTranslator
                     (word >> 8) & 0x3);
                 break;
             case Gen5ShaderEncoding.Flat:
-            {
-                var extra = words[1];
-                var vectorAddress = extra & 0xFF;
-                var vectorData = (extra >> 8) & 0xFF;
-                var scalarAddress = (extra >> 16) & 0x7F;
-                var usesFlatAddress = opcode.StartsWith(
-                    "Flat",
-                    StringComparison.Ordinal);
-                var memoryOpcode = usesFlatAddress
-                    ? "Global" + opcode["Flat".Length..]
-                    : opcode;
-                var dwordCount = memoryOpcode switch
                 {
-                    "GlobalLoadUbyte" or
-                    "GlobalLoadSbyte" or
-                    "GlobalLoadUshort" or
-                    "GlobalLoadSshort" or
-                    "GlobalLoadUbyteD16" or
-                    "GlobalLoadUbyteD16Hi" or
-                    "GlobalLoadSbyteD16" or
-                    "GlobalLoadSbyteD16Hi" or
-                    "GlobalLoadShortD16" or
-                    "GlobalLoadShortD16Hi" or
-                    "GlobalStoreByte" or
-                    "GlobalStoreByteD16Hi" or
-                    "GlobalStoreShort" or
-                    "GlobalStoreShortD16Hi" or
-                    "GlobalStoreDword" or
-                    "GlobalAtomicAdd" or
-                    "GlobalAtomicUMax" => 1u,
-                    "GlobalLoadDword" => 1u,
-                    "GlobalLoadDwordx2" => 2u,
-                    "GlobalLoadDwordx3" => 3u,
-                    "GlobalLoadDwordx4" => 4u,
-                    "GlobalStoreDwordx2" => 2u,
-                    "GlobalStoreDwordx3" => 3u,
-                    "GlobalStoreDwordx4" => 4u,
-                    _ => 0u,
-                };
-                sources = usesFlatAddress
-                    ?
-                    [
-                        Gen5Operand.Vector(vectorAddress),
+                    var extra = words[1];
+                    var vectorAddress = extra & 0xFF;
+                    var vectorData = (extra >> 8) & 0xFF;
+                    var scalarAddress = (extra >> 16) & 0x7F;
+                    var usesFlatAddress = opcode.StartsWith(
+                        "Flat",
+                        StringComparison.Ordinal);
+                    var memoryOpcode = usesFlatAddress
+                        ? "Global" + opcode["Flat".Length..]
+                        : opcode;
+                    var dwordCount = memoryOpcode switch
+                    {
+                        "GlobalLoadUbyte" or
+                        "GlobalLoadSbyte" or
+                        "GlobalLoadUshort" or
+                        "GlobalLoadSshort" or
+                        "GlobalLoadUbyteD16" or
+                        "GlobalLoadUbyteD16Hi" or
+                        "GlobalLoadSbyteD16" or
+                        "GlobalLoadSbyteD16Hi" or
+                        "GlobalLoadShortD16" or
+                        "GlobalLoadShortD16Hi" or
+                        "GlobalStoreByte" or
+                        "GlobalStoreByteD16Hi" or
+                        "GlobalStoreShort" or
+                        "GlobalStoreShortD16Hi" or
+                        "GlobalStoreDword" or
+                        "GlobalAtomicAdd" or
+                        "GlobalAtomicUMax" => 1u,
+                        "GlobalLoadDword" => 1u,
+                        "GlobalLoadDwordx2" => 2u,
+                        "GlobalLoadDwordx3" => 3u,
+                        "GlobalLoadDwordx4" => 4u,
+                        "GlobalStoreDwordx2" => 2u,
+                        "GlobalStoreDwordx3" => 3u,
+                        "GlobalStoreDwordx4" => 4u,
+                        _ => 0u,
+                    };
+                    sources = usesFlatAddress
+                        ?
+                        [
+                            Gen5Operand.Vector(vectorAddress),
                         Gen5Operand.Vector(vectorAddress + 1),
-                    ]
-                    :
+                        ]
+                        :
+                        [
+                            Gen5Operand.Vector(vectorAddress),
+                        Gen5Operand.Scalar(scalarAddress),
+                        ];
+                    destinations = memoryOpcode.StartsWith(
+                            "GlobalLoad",
+                            StringComparison.Ordinal)
+                        ? Enumerable
+                            .Range((int)vectorData, checked((int)dwordCount))
+                            .Select(index => Gen5Operand.Vector((uint)index))
+                            .ToArray()
+                        : [];
+                    control = new Gen5GlobalMemoryControl(
+                        dwordCount,
+                        vectorAddress,
+                        vectorData,
+                        usesFlatAddress ? uint.MaxValue : scalarAddress,
+                        SignExtend(word & 0x1FFF, 13),
+                        ((word >> 16) & 1) != 0,
+                        ((word >> 17) & 1) != 0,
+                        usesFlatAddress);
+                    break;
+                }
+            case Gen5ShaderEncoding.Mubuf:
+                {
+                    var extra = words[1];
+                    var vectorAddress = extra & 0xFF;
+                    var vectorData = (extra >> 8) & 0xFF;
+                    var scalarResource = ((extra >> 16) & 0x1F) * 4;
+                    var scalarOffset = (extra >> 24) & 0xFF;
+                    var dwordCount = opcode switch
+                    {
+                        "BufferLoadFormatX" => 1u,
+                        "BufferLoadFormatXy" => 2u,
+                        "BufferLoadFormatXyz" => 3u,
+                        "BufferLoadFormatXyzw" => 4u,
+                        "BufferStoreFormatX" => 1u,
+                        "BufferStoreFormatXy" => 2u,
+                        "BufferStoreFormatXyz" => 3u,
+                        "BufferStoreFormatXyzw" => 4u,
+                        "BufferLoadUbyte" or
+                        "BufferLoadSbyte" or
+                        "BufferLoadUshort" or
+                        "BufferLoadSshort" or
+                        "BufferStoreByte" or
+                        "BufferStoreByteD16Hi" or
+                        "BufferStoreShort" or
+                        "BufferStoreShortD16Hi" or
+                        "BufferLoadUbyteD16" or
+                        "BufferLoadUbyteD16Hi" or
+                        "BufferLoadSbyteD16" or
+                        "BufferLoadSbyteD16Hi" or
+                        "BufferLoadShortD16" or
+                        "BufferLoadShortD16Hi" => 1u,
+                        "BufferLoadDword" => 1u,
+                        "BufferLoadDwordx2" => 2u,
+                        "BufferLoadDwordx3" => 3u,
+                        "BufferLoadDwordx4" => 4u,
+                        "BufferStoreDword" => 1u,
+                        "BufferStoreDwordx2" => 2u,
+                        "BufferStoreDwordx3" => 3u,
+                        "BufferStoreDwordx4" => 4u,
+                        "BufferAtomicCmpswap" => 2u,
+                        _ when opcode.StartsWith("BufferAtomic", StringComparison.Ordinal) => 1u,
+                        _ => 0u,
+                    };
+                    sources =
                     [
                         Gen5Operand.Vector(vectorAddress),
-                        Gen5Operand.Scalar(scalarAddress),
-                    ];
-                destinations = memoryOpcode.StartsWith(
-                        "GlobalLoad",
-                        StringComparison.Ordinal)
-                    ? Enumerable
+                    Gen5Operand.Scalar(scalarResource),
+                    Gen5Operand.Source(scalarOffset, literal),
+                ];
+                    destinations = Enumerable
                         .Range((int)vectorData, checked((int)dwordCount))
                         .Select(index => Gen5Operand.Vector((uint)index))
-                        .ToArray()
-                    : [];
-                control = new Gen5GlobalMemoryControl(
-                    dwordCount,
-                    vectorAddress,
-                    vectorData,
-                    usesFlatAddress ? uint.MaxValue : scalarAddress,
-                    SignExtend(word & 0x1FFF, 13),
-                    ((word >> 16) & 1) != 0,
-                    ((word >> 17) & 1) != 0,
-                    usesFlatAddress);
-                break;
-            }
-            case Gen5ShaderEncoding.Mubuf:
-            {
-                var extra = words[1];
-                var vectorAddress = extra & 0xFF;
-                var vectorData = (extra >> 8) & 0xFF;
-                var scalarResource = ((extra >> 16) & 0x1F) * 4;
-                var scalarOffset = (extra >> 24) & 0xFF;
-                var dwordCount = opcode switch
-                {
-                    "BufferLoadFormatX" => 1u,
-                    "BufferLoadFormatXy" => 2u,
-                    "BufferLoadFormatXyz" => 3u,
-                    "BufferLoadFormatXyzw" => 4u,
-                    "BufferStoreFormatX" => 1u,
-                    "BufferStoreFormatXy" => 2u,
-                    "BufferStoreFormatXyz" => 3u,
-                    "BufferStoreFormatXyzw" => 4u,
-                    "BufferLoadUbyte" or
-                    "BufferLoadSbyte" or
-                    "BufferLoadUshort" or
-                    "BufferLoadSshort" or
-                    "BufferStoreByte" or
-                    "BufferStoreByteD16Hi" or
-                    "BufferStoreShort" or
-                    "BufferStoreShortD16Hi" or
-                    "BufferLoadUbyteD16" or
-                    "BufferLoadUbyteD16Hi" or
-                    "BufferLoadSbyteD16" or
-                    "BufferLoadSbyteD16Hi" or
-                    "BufferLoadShortD16" or
-                    "BufferLoadShortD16Hi" => 1u,
-                    "BufferLoadDword" => 1u,
-                    "BufferLoadDwordx2" => 2u,
-                    "BufferLoadDwordx3" => 3u,
-                    "BufferLoadDwordx4" => 4u,
-                    "BufferStoreDword" => 1u,
-                    "BufferStoreDwordx2" => 2u,
-                    "BufferStoreDwordx3" => 3u,
-                    "BufferStoreDwordx4" => 4u,
-                    "BufferAtomicCmpswap" => 2u,
-                    _ when opcode.StartsWith("BufferAtomic", StringComparison.Ordinal) => 1u,
-                    _ => 0u,
-                };
-                sources =
-                [
-                    Gen5Operand.Vector(vectorAddress),
-                    Gen5Operand.Scalar(scalarResource),
-                    Gen5Operand.Source(scalarOffset, literal),
-                ];
-                destinations = Enumerable
-                    .Range((int)vectorData, checked((int)dwordCount))
-                    .Select(index => Gen5Operand.Vector((uint)index))
-                    .ToArray();
-                control = new Gen5BufferMemoryControl(
-                    dwordCount,
-                    vectorAddress,
-                    vectorData,
-                    scalarResource,
-                    (int)(word & 0xFFF),
-                    ((word >> 13) & 1) != 0,
-                    ((word >> 12) & 1) != 0,
-                    ((word >> 14) & 1) != 0,
-                    ((extra >> 22) & 1) != 0);
-                break;
-            }
+                        .ToArray();
+                    control = new Gen5BufferMemoryControl(
+                        dwordCount,
+                        vectorAddress,
+                        vectorData,
+                        scalarResource,
+                        (int)(word & 0xFFF),
+                        ((word >> 13) & 1) != 0,
+                        ((word >> 12) & 1) != 0,
+                        ((word >> 14) & 1) != 0,
+                        ((extra >> 22) & 1) != 0);
+                    break;
+                }
             case Gen5ShaderEncoding.Mtbuf:
-            {
-                var extra = words[1];
-                var vectorAddress = extra & 0xFF;
-                var vectorData = (extra >> 8) & 0xFF;
-                var scalarResource = ((extra >> 16) & 0x1F) * 4;
-                var scalarOffset = (extra >> 24) & 0xFF;
-                var dwordCount = opcode switch
                 {
-                    "TBufferLoadFormatX" => 1u,
-                    "TBufferLoadFormatXy" => 2u,
-                    "TBufferLoadFormatXyz" => 3u,
-                    "TBufferLoadFormatXyzw" => 4u,
-                    _ => 0u,
-                };
-                sources =
-                [
-                    Gen5Operand.Vector(vectorAddress),
+                    var extra = words[1];
+                    var vectorAddress = extra & 0xFF;
+                    var vectorData = (extra >> 8) & 0xFF;
+                    var scalarResource = ((extra >> 16) & 0x1F) * 4;
+                    var scalarOffset = (extra >> 24) & 0xFF;
+                    var dwordCount = opcode switch
+                    {
+                        "TBufferLoadFormatX" => 1u,
+                        "TBufferLoadFormatXy" => 2u,
+                        "TBufferLoadFormatXyz" => 3u,
+                        "TBufferLoadFormatXyzw" => 4u,
+                        _ => 0u,
+                    };
+                    sources =
+                    [
+                        Gen5Operand.Vector(vectorAddress),
                     Gen5Operand.Scalar(scalarResource),
                     Gen5Operand.Source(scalarOffset, literal),
                 ];
-                destinations = Enumerable
-                    .Range((int)vectorData, checked((int)dwordCount))
-                    .Select(index => Gen5Operand.Vector((uint)index))
-                    .ToArray();
-                control = new Gen5BufferMemoryControl(
-                    dwordCount,
-                    vectorAddress,
-                    vectorData,
-                    scalarResource,
-                    (int)(word & 0xFFF),
-                    ((word >> 13) & 1) != 0,
-                    ((word >> 12) & 1) != 0,
-                    ((word >> 14) & 1) != 0,
-                    ((extra >> 22) & 1) != 0);
-                break;
-            }
+                    destinations = Enumerable
+                        .Range((int)vectorData, checked((int)dwordCount))
+                        .Select(index => Gen5Operand.Vector((uint)index))
+                        .ToArray();
+                    control = new Gen5BufferMemoryControl(
+                        dwordCount,
+                        vectorAddress,
+                        vectorData,
+                        scalarResource,
+                        (int)(word & 0xFFF),
+                        ((word >> 13) & 1) != 0,
+                        ((word >> 12) & 1) != 0,
+                        ((word >> 14) & 1) != 0,
+                        ((extra >> 22) & 1) != 0);
+                    break;
+                }
             case Gen5ShaderEncoding.Mimg:
-            {
-                var extra = words[1];
-                var vectorAddress = extra & 0xFF;
-                var vectorData = (extra >> 8) & 0xFF;
-                var scalarResource = ((extra >> 16) & 0x1F) * 4;
-                var scalarSampler = ((extra >> 21) & 0x1F) * 4;
-                var addressRegisters = new List<uint>(1 + Math.Max(0, words.Length - 2) * 4)
+                {
+                    var extra = words[1];
+                    var vectorAddress = extra & 0xFF;
+                    var vectorData = (extra >> 8) & 0xFF;
+                    var scalarResource = ((extra >> 16) & 0x1F) * 4;
+                    var scalarSampler = ((extra >> 21) & 0x1F) * 4;
+                    var addressRegisters = new List<uint>(1 + Math.Max(0, words.Length - 2) * 4)
                 {
                     vectorAddress,
                 };
-                for (var wordIndex = 2; wordIndex < words.Length; wordIndex++)
-                {
-                    for (var shift = 0; shift < 32; shift += 8)
+                    for (var wordIndex = 2; wordIndex < words.Length; wordIndex++)
                     {
-                        addressRegisters.Add((words[wordIndex] >> shift) & 0xFF);
+                        for (var shift = 0; shift < 32; shift += 8)
+                        {
+                            addressRegisters.Add((words[wordIndex] >> shift) & 0xFF);
+                        }
                     }
-                }
 
-                var imageSources = new List<Gen5Operand>(addressRegisters.Count + 2);
-                foreach (var addressRegister in addressRegisters)
-                {
-                    imageSources.Add(Gen5Operand.Vector(addressRegister));
-                }
+                    var imageSources = new List<Gen5Operand>(addressRegisters.Count + 2);
+                    foreach (var addressRegister in addressRegisters)
+                    {
+                        imageSources.Add(Gen5Operand.Vector(addressRegister));
+                    }
 
-                imageSources.Add(Gen5Operand.Scalar(scalarResource));
-                imageSources.Add(Gen5Operand.Scalar(scalarSampler));
-                sources = imageSources;
-                destinations = opcode.StartsWith("ImageStore", StringComparison.Ordinal)
-                    ? []
-                    : [Gen5Operand.Vector(vectorData)];
-                var dimension = (word >> 3) & 0x7;
-                control = new Gen5ImageControl(
-                    (word >> 8) & 0xF,
-                    vectorAddress,
-                    addressRegisters,
-                    vectorData,
-                    scalarResource,
-                    scalarSampler,
-                    dimension,
-                    dimension is 4 or 5 or 7,
-                    ((word >> 13) & 1) != 0,
-                    ((word >> 25) & 1) != 0,
-                    ((extra >> 30) & 1) != 0,
-                    ((extra >> 31) & 1) != 0);
-                break;
-            }
+                    imageSources.Add(Gen5Operand.Scalar(scalarResource));
+                    imageSources.Add(Gen5Operand.Scalar(scalarSampler));
+                    sources = imageSources;
+                    destinations = opcode.StartsWith("ImageStore", StringComparison.Ordinal)
+                        ? []
+                        : [Gen5Operand.Vector(vectorData)];
+                    var dimension = (word >> 3) & 0x7;
+                    control = new Gen5ImageControl(
+                        (word >> 8) & 0xF,
+                        vectorAddress,
+                        addressRegisters,
+                        vectorData,
+                        scalarResource,
+                        scalarSampler,
+                        dimension,
+                        dimension is 4 or 5 or 7,
+                        ((word >> 13) & 1) != 0,
+                        ((word >> 25) & 1) != 0,
+                        ((extra >> 30) & 1) != 0,
+                        ((extra >> 31) & 1) != 0);
+                    break;
+                }
             case Gen5ShaderEncoding.Exp:
-            {
-                var extra = words[1];
-                sources =
-                [
-                    Gen5Operand.Vector(extra & 0xFF),
+                {
+                    var extra = words[1];
+                    sources =
+                    [
+                        Gen5Operand.Vector(extra & 0xFF),
                     Gen5Operand.Vector((extra >> 8) & 0xFF),
                     Gen5Operand.Vector((extra >> 16) & 0xFF),
                     Gen5Operand.Vector((extra >> 24) & 0xFF),
                 ];
-                control = new Gen5ExportControl(
-                    (word >> 4) & 0x3F,
-                    word & 0xF,
-                    ((word >> 10) & 1) != 0,
-                    ((word >> 11) & 1) != 0,
-                    ((word >> 12) & 1) != 0);
-                break;
-            }
+                    control = new Gen5ExportControl(
+                        (word >> 4) & 0x3F,
+                        word & 0xF,
+                        ((word >> 10) & 1) != 0,
+                        ((word >> 11) & 1) != 0,
+                        ((word >> 12) & 1) != 0);
+                    break;
+                }
         }
 
         return new Gen5ShaderInstruction(pc, encoding, opcode, words, sources, destinations, control);
