@@ -334,19 +334,15 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         // non-executable commit cannot be satisfied (see TryAllocateAtExact).
         ulong result = _hostMemory.Allocate(desiredAddress, alignedSize, hostProtection);
 
-        if (result == 0 && desiredAddress != 0)
-        {
-            if (_hostMemory.Commit(desiredAddress, alignedSize, hostProtection))
-            {
-                result = desiredAddress;
-            }
-        }
-
         if (result == 0)
         {
             if (!allowAlternative)
             {
-                if (allowLazyReserve)
+                if (!allowLazyReserve && desiredAddress != 0 && _hostMemory.Commit(desiredAddress, alignedSize, hostProtection))
+                {
+                    result = desiredAddress;
+                }
+                else if (allowLazyReserve)
                 {
                     result = _hostMemory.Reserve(desiredAddress, alignedSize, HostPageProtection.ReadWrite);
                     reservedOnly = result != 0;
@@ -525,7 +521,7 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
             cursor = runEnd;
         }
 
-        if (stagedAllocations.Count == 0 && cursor < end)
+        if (stagedAllocations.Count == 0)
         {
             return false;
         }
