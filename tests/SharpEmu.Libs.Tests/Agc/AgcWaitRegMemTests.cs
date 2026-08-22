@@ -72,6 +72,97 @@ public sealed class AgcWaitRegMemTests
     }
 
     [Fact]
+    public void CollectExpiredRetries_ReturnsNull_WhenNoWaitersOrNoExpiredRetries()
+    {
+        GpuWaitRegistry.Clear();
+        var memory1 = new object();
+        var memory2 = new object();
+
+        // Registry empty
+        Assert.Null(GpuWaitRegistry.CollectExpiredRetries(memory1, 1000));
+
+        // Register waiter without retry deadline (RetryDeadlineTicks = 0)
+        GpuWaitRegistry.Register(0x1000, new GpuWaitRegistry.WaitingDcb
+        {
+            Memory = memory1,
+            RetryDeadlineTicks = 0,
+        });
+
+        // Register waiter with future retry deadline (nowTicks < RetryDeadlineTicks)
+        GpuWaitRegistry.Register(0x1000, new GpuWaitRegistry.WaitingDcb
+        {
+            Memory = memory1,
+            RetryDeadlineTicks = 2000,
+        });
+
+        // Register waiter with expired deadline but different memory instance
+        GpuWaitRegistry.Register(0x2000, new GpuWaitRegistry.WaitingDcb
+        {
+            Memory = memory2,
+            RetryDeadlineTicks = 500,
+        });
+
+        Assert.Equal(3, GpuWaitRegistry.Count);
+
+        // Collect for memory1 at nowTicks = 1000 -> Should return null
+        Assert.Null(GpuWaitRegistry.CollectExpiredRetries(memory1, 1000));
+        Assert.Equal(3, GpuWaitRegistry.Count);
+
+        GpuWaitRegistry.Clear();
+    }
+
+    [Fact]
+    public void CollectExpiredRetries_CollectsAndRemovesExpiredWaiters()
+    {
+        GpuWaitRegistry.Clear();
+        var memory = new object();
+
+        var expiredWaiter1 = new GpuWaitRegistry.WaitingDcb
+        {
+            Memory = memory,
+            RetryDeadlineTicks = 1000,
+            CommandBufferAddress = 0xAAAA,
+        };
+
+        var expiredWaiter2 = new GpuWaitRegistry.WaitingDcb
+        {
+            Memory = memory,
+            RetryDeadlineTicks = 800,
+            CommandBufferAddress = 0xBBBB,
+        };
+
+        var unexpiredWaiter = new GpuWaitRegistry.WaitingDcb
+        {
+            Memory = memory,
+            RetryDeadlineTicks = 2000,
+            CommandBufferAddress = 0xCCCC,
+        };
+
+        GpuWaitRegistry.Register(0x1000, expiredWaiter1);
+        GpuWaitRegistry.Register(0x1000, unexpiredWaiter);
+        GpuWaitRegistry.Register(0x2000, expiredWaiter2);
+
+        Assert.Equal(3, GpuWaitRegistry.Count);
+
+        var expired = GpuWaitRegistry.CollectExpiredRetries(memory, nowTicks: 1200);
+
+        Assert.NotNull(expired);
+        Assert.Equal(2, expired.Count);
+        Assert.Contains(expired, w => w.CommandBufferAddress == 0xAAAA);
+        Assert.Contains(expired, w => w.CommandBufferAddress == 0xBBBB);
+
+        // Remaining waiter in registry
+        Assert.Equal(1, GpuWaitRegistry.Count);
+        Assert.Equal(1, GpuWaitRegistry.CountForMemory(memory));
+
+        // Address 0x2000 was completely emptied and removed from registry
+        var snapshot = GpuWaitRegistry.SnapshotOutstanding(memory);
+        Assert.Equal(1, snapshot.Outstanding);
+
+        GpuWaitRegistry.Clear();
+    }
+
+    [Fact]
     public void WaitRegMemPatchFunctions_UseGen5Fields()
     {
         var memory = CreateMemory(out var ctx);
