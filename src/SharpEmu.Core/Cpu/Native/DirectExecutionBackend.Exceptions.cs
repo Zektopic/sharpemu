@@ -90,8 +90,9 @@ public sealed partial class DirectExecutionBackend
 			Console.Error.WriteLine($"[LOADER][FATAL]   RSP: 0x{rsp:X16}");
 			Console.Error.Flush();
 		}
-		catch
+		catch (Exception ex)
 		{
+			Console.Error.WriteLine($"[LOADER][FATAL] Unhandled exception filter logging failed: {ex.Message}");
 		}
 
 		return 0;
