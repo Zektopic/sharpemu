@@ -1377,10 +1377,27 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
 
     public bool IsAccessible(ulong virtualAddress, ulong size)
     {
+        if (size == 0)
+        {
+            return true;
+        }
+
         _gate.EnterReadLock();
         try
         {
-            return FindRegion(virtualAddress, size) is not null;
+            var cursor = virtualAddress;
+            var end = virtualAddress + size;
+            while (cursor < end)
+            {
+                var region = FindRegion(cursor, 1);
+                if (region is null)
+                {
+                    return false;
+                }
+                var regionEnd = region.VirtualAddress + region.Size;
+                cursor = Math.Min(end, regionEnd);
+            }
+            return true;
         }
         finally
         {
