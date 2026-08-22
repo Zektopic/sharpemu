@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 using SharpEmu.HLE;
+using SharpEmu.Libs.Utils;
 using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json;
@@ -223,8 +224,7 @@ public static class AppContentExports
             appName = "default";
         }
 
-        var invalidChars = Path.GetInvalidFileNameChars();
-        appName = new string(appName.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray());
+        appName = PathSanitizer.SanitizeFileName(appName);
         var root = Path.Combine(Path.GetTempPath(), "SharpEmu", appName, "temp0");
         Environment.SetEnvironmentVariable(temp0VariableName, root);
         return root;

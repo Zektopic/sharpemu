@@ -3,6 +3,7 @@
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using SharpEmu.Libs.Utils;
 
 namespace SharpEmu.Libs.SaveData;
 
@@ -116,15 +117,7 @@ public static class SaveDataStorage
             return "default";
         }
 
-        var invalid = Path.GetInvalidFileNameChars();
-        Span<char> buffer = value.Length <= 128 ? stackalloc char[value.Length] : new char[value.Length];
-        for (var i = 0; i < value.Length; i++)
-        {
-            var ch = value[i];
-            buffer[i] = Array.IndexOf(invalid, ch) >= 0 ? '_' : ch;
-        }
-
-        var sanitized = new string(buffer).Trim();
+        var sanitized = PathSanitizer.SanitizeFileName(value).Trim();
         return string.IsNullOrWhiteSpace(sanitized) ? "default" : sanitized;
     }
 
