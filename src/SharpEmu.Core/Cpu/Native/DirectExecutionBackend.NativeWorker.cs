@@ -701,6 +701,7 @@ public sealed partial class DirectExecutionBackend
 				}
 				catch
 				{
+					// Ignore failures while writing error diagnostic logs to prevent unhandled exceptions in unmanaged callbacks.
 				}
 				return 0;
 			}
@@ -723,6 +724,7 @@ public sealed partial class DirectExecutionBackend
 				}
 				catch
 				{
+					// Ignore failures while writing error diagnostic logs to prevent unhandled exceptions in unmanaged callbacks.
 				}
 			}
 		}
