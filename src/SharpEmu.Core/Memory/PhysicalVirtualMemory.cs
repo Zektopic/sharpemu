@@ -25,7 +25,10 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
     private static CommittedRangeCache? _committedRangeCache;
 
     private long _mappingGeneration;
+    private volatile SnapshotCache? _snapshotCache;
     private const ulong PageSize = 0x1000;
+
+    private sealed record SnapshotCache(long Generation, VirtualMemoryRegion[] Regions);
     private const ulong GuestAllocationArenaAddress = 0x00006000_0000_0000;
     private const ulong GuestAllocationArenaSize = 0x0100_0000;
     private const ulong GuestAllocationArenaStartOffset = PageSize;
@@ -936,11 +939,19 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         }
     }
 
+    /// <summary>Reduces GC pressure by caching the array snapshot based on mapping generation.</summary>
     public IReadOnlyList<VirtualMemoryRegion> SnapshotRegions()
     {
         _gate.EnterReadLock();
         try
         {
+            var currentGeneration = Volatile.Read(ref _mappingGeneration);
+            var cache = _snapshotCache;
+            if (cache != null && cache.Generation == currentGeneration)
+            {
+                return cache.Regions;
+            }
+
             var snapshot = new VirtualMemoryRegion[_regions.Count];
             for (var i = 0; i < _regions.Count; i++)
             {
@@ -952,6 +963,8 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
                     r.Size,
                     r.IsExecutable ? ProgramHeaderFlags.Execute | ProgramHeaderFlags.Read : ProgramHeaderFlags.Read);
             }
+
+            _snapshotCache = new SnapshotCache(currentGeneration, snapshot);
             return snapshot;
         }
         finally
