@@ -23,6 +23,18 @@ internal static class GuestDataPool
 
     public static void Trim() => ((BoundedByteArrayPool)Shared).Trim();
 
+    public static (int Leases, ulong CachedBytes) DiagnosticStats()
+    {
+        if (Shared is BoundedByteArrayPool pool)
+        {
+            lock (pool._gate)
+            {
+                return (pool._leases.Count, pool._cachedBytes);
+            }
+        }
+        return (0, 0);
+    }
+
     internal sealed class BoundedByteArrayPool : ArrayPool<byte>
     {
         private readonly object _gate = new();

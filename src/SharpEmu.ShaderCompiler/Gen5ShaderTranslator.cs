@@ -1625,7 +1625,7 @@ public static class Gen5ShaderTranslator
 
     public static bool RequiresStorageImage(
         Gen5ImageBinding binding,
-        IReadOnlyList<Gen5ImageBinding> stageBindings)
+        IEnumerable<Gen5ImageBinding> stageBindings)
     {
         if (IsStorageImageOperation(binding.Opcode))
         {
