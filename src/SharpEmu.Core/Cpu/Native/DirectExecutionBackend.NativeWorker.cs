@@ -699,8 +699,11 @@ public sealed partial class DirectExecutionBackend
 					Console.Error.WriteLine(
 						$"[LOADER][ERROR] Native guest worker prologue failed: {ex.GetType().Name}: {ex.Message}");
 				}
-				catch
+				catch (Exception loggingEx)
 				{
+					// Ignore failures when writing to Console.Error to prevent exceptions
+					// escaping across UnmanagedCallersOnly unmanaged boundaries.
+					_ = loggingEx;
 				}
 				return 0;
 			}
@@ -721,8 +724,11 @@ public sealed partial class DirectExecutionBackend
 					Console.Error.WriteLine(
 						$"[LOADER][ERROR] Native guest worker epilogue failed: {ex.GetType().Name}: {ex.Message}");
 				}
-				catch
+				catch (Exception loggingEx)
 				{
+					// Ignore failures when writing to Console.Error to prevent exceptions
+					// escaping across UnmanagedCallersOnly unmanaged boundaries.
+					_ = loggingEx;
 				}
 			}
 		}
