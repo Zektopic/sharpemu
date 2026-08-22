@@ -70,6 +70,7 @@ public sealed class PlayGoExportsTests : IDisposable
     [InlineData(UnusableMetadataKind.DatOnly)]
     [InlineData(UnusableMetadataKind.MalformedChunkDefinitions)]
     [InlineData(UnusableMetadataKind.UnrecognizedChunkDefinitions)]
+    [InlineData(UnusableMetadataKind.DtdChunkDefinitions)]
     public void GetLocus_UnparseableMetadata_RemainsPermissive(UnusableMetadataKind metadataKind)
     {
         switch (metadataKind)
@@ -85,6 +86,11 @@ public sealed class PlayGoExportsTests : IDisposable
                 break;
             case UnusableMetadataKind.UnrecognizedChunkDefinitions:
                 File.WriteAllText(Path.Combine(_app0Root, "playgo-chunkdefs.xml"), "<not-playgo/>");
+                break;
+            case UnusableMetadataKind.DtdChunkDefinitions:
+                File.WriteAllText(
+                    Path.Combine(_app0Root, "playgo-chunkdefs.xml"),
+                    "<!DOCTYPE playgo [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]><playgo default_chunk=\"2\"><chunk id=\"2\"/></playgo>");
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(metadataKind), metadataKind, null);
@@ -205,5 +211,6 @@ public sealed class PlayGoExportsTests : IDisposable
         DatOnly,
         MalformedChunkDefinitions,
         UnrecognizedChunkDefinitions,
+        DtdChunkDefinitions,
     }
 }
