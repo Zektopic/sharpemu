@@ -5466,6 +5466,13 @@ public static partial class KernelMemoryCompatExports
         return root;
     }
 
+    /// <summary>
+    /// Cached SIMD-accelerated <see cref="System.Buffers.SearchValues{T}"/> of invalid file name characters
+    /// used to replace O(N^2) LINQ array lookup and repeated <see cref="Path.GetInvalidFileNameChars()"/> allocations.
+    /// </summary>
+    private static readonly System.Buffers.SearchValues<char> InvalidFileNameCharsSearchValues =
+        System.Buffers.SearchValues.Create(Path.GetInvalidFileNameChars());
+
     private static string ResolveGameLogRoot() =>
         Path.GetFullPath(Path.Combine(
             AppContext.BaseDirectory,
@@ -5473,7 +5480,12 @@ public static partial class KernelMemoryCompatExports
             "game_logs",
             Volatile.Read(ref _applicationTitleId)));
 
-    private static string GetPerAppWritableRoot()
+    /// <summary>
+    /// Computes the host-writable root path for the application. Uses fast span-based
+    /// invalid character replacement via <see cref="System.Buffers.SearchValues{T}"/> to eliminate
+    /// unnecessary allocations and O(N^2) LINQ predicate checks per character.
+    /// </summary>
+    internal static string GetPerAppWritableRoot()
     {
         var app0Root = Environment.GetEnvironmentVariable("SHARPEMU_APP0_DIR");
         var appName = string.IsNullOrWhiteSpace(app0Root)
@@ -5484,8 +5496,21 @@ public static partial class KernelMemoryCompatExports
             appName = "default";
         }
 
-        var invalidChars = Path.GetInvalidFileNameChars();
-        appName = new string(appName.Select(ch => invalidChars.Contains(ch) ? '_' : ch).ToArray());
+        int firstInvalid = appName.AsSpan().IndexOfAny(InvalidFileNameCharsSearchValues);
+        if (firstInvalid >= 0)
+        {
+            appName = string.Create(appName.Length, appName, (span, src) =>
+            {
+                src.AsSpan().CopyTo(span);
+                for (int i = firstInvalid; i < span.Length; i++)
+                {
+                    if (InvalidFileNameCharsSearchValues.Contains(span[i]))
+                    {
+                        span[i] = '_';
+                    }
+                }
+            });
+        }
         return Path.Combine(Path.GetTempPath(), "SharpEmu", appName);
     }
 

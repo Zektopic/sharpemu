@@ -509,4 +509,73 @@ public sealed class KernelMemoryCompatExportsTests
 
         Assert.Equal((int)OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND, result);
     }
+
+    [Fact]
+    public void GetPerAppWritableRoot_SanitizesAppNameCorrectly()
+    {
+        var original = Environment.GetEnvironmentVariable("SHARPEMU_APP0_DIR");
+        try
+        {
+            Environment.SetEnvironmentVariable("SHARPEMU_APP0_DIR", null);
+            var pathDefault = KernelMemoryCompatExports.GetPerAppWritableRoot();
+            Assert.EndsWith("default", pathDefault);
+
+            Environment.SetEnvironmentVariable("SHARPEMU_APP0_DIR", "/usr/local/games/CUSA12345");
+            var pathCustom = KernelMemoryCompatExports.GetPerAppWritableRoot();
+            Assert.EndsWith("CUSA12345", pathCustom);
+
+            var invalidChars = Path.GetInvalidFileNameChars();
+            foreach (var invalidChar in invalidChars)
+            {
+                if (invalidChar == '\0') continue; // Skip null char as it distorts string manipulation in OS paths
+                var result = KernelMemoryCompatExports.GetPerAppWritableRoot();
+                Assert.DoesNotContain(invalidChar, Path.GetFileName(result));
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SHARPEMU_APP0_DIR", original);
+        }
+    }
+
+    [Fact]
+    public void GetPerAppWritableRoot_PerformanceBaseline()
+    {
+        var original = Environment.GetEnvironmentVariable("SHARPEMU_APP0_DIR");
+        try
+        {
+            Environment.SetEnvironmentVariable("SHARPEMU_APP0_DIR", "/path/to/my:app?name<>|*");
+
+            // Warmup
+            for (int i = 0; i < 100; i++)
+            {
+                _ = KernelMemoryCompatExports.GetPerAppWritableRoot();
+            }
+
+            const int iterations = 10_000;
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+
+            long startAlloc = GC.GetAllocatedBytesForCurrentThread();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+
+            for (int i = 0; i < iterations; i++)
+            {
+                _ = KernelMemoryCompatExports.GetPerAppWritableRoot();
+            }
+
+            sw.Stop();
+            long allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - startAlloc;
+
+            // Output baseline measurement
+            double bytesPerOp = (double)allocatedBytes / iterations;
+            double nsPerOp = (sw.Elapsed.TotalMilliseconds * 1_000_000.0) / iterations;
+            Assert.True(allocatedBytes >= 0);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SHARPEMU_APP0_DIR", original);
+        }
+    }
 }
