@@ -595,7 +595,7 @@ public sealed class GuestMemoryAllocatorTests
             }
 
             var allocationBase = AlignDown(desiredAddress, Granularity);
-            var end = AlignUp(desiredAddress + size, Page);
+            var end = AlignUp(desiredAddress + size, Granularity);
             foreach (var (existingBase, existing) in _allocations)
             {
                 if (allocationBase < existingBase + existing.Size && existingBase < end)
