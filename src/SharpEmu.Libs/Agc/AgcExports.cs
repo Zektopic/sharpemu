@@ -675,7 +675,7 @@ public static partial class AgcExports
     private sealed record RegisterDefaultsAllocation(ulong Primary, ulong Internal);
 
     // NID captured from shipped titles; 'sceAgcInit' is a working label that collides with a real catalog symbol of a different NID. Rename pending AGC API confirmation.
-    #pragma warning disable SHEM004
+#pragma warning disable SHEM004
     [SysAbiExport(
         Nid = "23LRUSvYu1M",
         ExportName = "sceAgcInit",
@@ -693,7 +693,7 @@ public static partial class AgcExports
         TraceAgc($"agc.init state=0x{stateAddress:X16} version={version}");
         return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_OK);
     }
-    #pragma warning restore SHEM004
+#pragma warning restore SHEM004
 
     [SysAbiExport(
         Nid = "2JtWUUiYBXs",
@@ -801,7 +801,7 @@ public static partial class AgcExports
     }
 
     // NID captured from shipped titles; the friendly name collides with a real catalog symbol of a different NID. Rename pending AGC API confirmation.
-    #pragma warning disable SHEM004
+#pragma warning disable SHEM004
     [SysAbiExport(
         Nid = "dolOmWH+huQ",
         ExportName = "sceAgcGetFusedShaderSize",
@@ -841,10 +841,10 @@ public static partial class AgcExports
         ctx[CpuRegister.Rax] = 0;
         return (int)OrbisGen2Result.ORBIS_GEN2_OK;
     }
-    #pragma warning restore SHEM004
+#pragma warning restore SHEM004
 
     // NID captured from shipped titles; the friendly name collides with a real catalog symbol of a different NID. Rename pending AGC API confirmation.
-    #pragma warning disable SHEM004
+#pragma warning disable SHEM004
     [SysAbiExport(
         Nid = "fd5Bp5tGTgo",
         ExportName = "sceAgcFuseShaderHalves",
@@ -969,7 +969,7 @@ public static partial class AgcExports
         ctx[CpuRegister.Rax] = 0;
         return (int)OrbisGen2Result.ORBIS_GEN2_OK;
     }
-    #pragma warning restore SHEM004
+#pragma warning restore SHEM004
 
     [SysAbiExport(
         Nid = "vcmNN+AAXnY",
@@ -1066,7 +1066,7 @@ public static partial class AgcExports
     }
 
     // NID captured from shipped titles; the friendly name collides with a real catalog symbol of a different NID. Rename pending AGC API confirmation.
-    #pragma warning disable SHEM004
+#pragma warning disable SHEM004
     [SysAbiExport(
         Nid = "HV4j+E0MBHE",
         ExportName = "sceAgcCreateInterpolantMapping",
@@ -1181,7 +1181,7 @@ public static partial class AgcExports
         ctx[CpuRegister.Rax] = 0;
         return (int)OrbisGen2Result.ORBIS_GEN2_OK;
     }
-    #pragma warning restore SHEM004
+#pragma warning restore SHEM004
 
     private static uint ApplyInterpolantDefaultValue(uint value, uint psWord)
     {
@@ -1302,7 +1302,7 @@ public static partial class AgcExports
     }
 
     // NID captured from shipped titles; the friendly name collides with a real catalog symbol of a different NID. Rename pending AGC API confirmation.
-    #pragma warning disable SHEM004
+#pragma warning disable SHEM004
     [SysAbiExport(
         Nid = "V++UgBtQhn0",
         ExportName = "sceAgcGetDataPacketPayloadAddress",
@@ -1346,7 +1346,7 @@ public static partial class AgcExports
         ctx[CpuRegister.Rax] = 0;
         return (int)OrbisGen2Result.ORBIS_GEN2_OK;
     }
-    #pragma warning restore SHEM004
+#pragma warning restore SHEM004
 
     [SysAbiExport(
         Nid = "LtTouSCZjHM",
@@ -3413,7 +3413,7 @@ public static partial class AgcExports
     }
 
     // Synthetic label for an uncatalogued NID (the Unknown* convention); the NID is authoritative.
-    #pragma warning disable SHEM006
+#pragma warning disable SHEM006
     [SysAbiExport(
     Nid = "-KRzWekV120",
     ExportName = "sceAgcDriverUnknown_KRzWekV120",
@@ -3428,7 +3428,7 @@ public static partial class AgcExports
 
         return SetReturn(ctx, OrbisGen2Result.ORBIS_GEN2_OK);
     }
-    #pragma warning restore SHEM006
+#pragma warning restore SHEM006
 
     [SysAbiExport(
         Nid = "h9z6+0hEydk",
@@ -3443,7 +3443,7 @@ public static partial class AgcExports
     }
 
     // Synthetic label for an uncatalogued NID (the Unknown* convention); the NID is authoritative.
-    #pragma warning disable SHEM006
+#pragma warning disable SHEM006
     [SysAbiExport(
         Nid = "qj7QZpgr9Uw",
         ExportName = "sceAgcUnknownQj7QZpgr9Uw",
@@ -3464,7 +3464,7 @@ public static partial class AgcExports
             $"arg1=0x{ctx[CpuRegister.Rsi]:X16} arg2=0x{ctx[CpuRegister.Rdx]:X16}");
         return ReturnPointer(ctx, commandAddress);
     }
-    #pragma warning restore SHEM006
+#pragma warning restore SHEM006
 
     private static void EnqueueSubmittedDcb(
         CpuContext ctx,
@@ -7656,12 +7656,16 @@ public static partial class AgcExports
     private static int _tracedAstroTitlePixelGlobals;
     private static int _tracedAstroTitlePixelGlobalProbe;
 
+    /// <summary>
+    /// Traces Astro Title pixel global probes using indexed iteration to eliminate LINQ closure and tuple heap allocations per loop iteration.
+    /// </summary>
     private static void TraceAstroTitlePixelGlobalProbe(Gen5ShaderEvaluation evaluation)
     {
         const int probeOffset = 17216;
         var draw = Interlocked.Increment(ref _tracedAstroTitlePixelGlobalProbe);
-        foreach (var (binding, index) in evaluation.GlobalMemoryBindings.Select((value, index) => (value, index)))
+        for (var index = 0; index < evaluation.GlobalMemoryBindings.Count; index++)
         {
+            var binding = evaluation.GlobalMemoryBindings[index];
             if (probeOffset + 16 > binding.DataLength)
             {
                 continue;
@@ -9800,34 +9804,34 @@ public static partial class AgcExports
                     if (readAllLayers)
                     {
                         NoteSampledAddress(descriptor.Address, descriptor.Format, descriptor.NumberType);
-            texture = new GuestDrawTexture(
-                            descriptor.Address,
-                            descriptor.Width,
-                            descriptor.Height,
-                            descriptor.Format,
-                            descriptor.NumberType,
-                            [],
-                            IsFallback: false,
-                            IsStorage: false,
-                            MipLevels: descriptor.MipLevels,
-                            MipLevel: mipLevel,
-                            BaseMipLevel: descriptor.ViewBaseLevel,
-                            ResourceMipLevels: descriptor.ResourceMipLevels,
-                            Pitch: sourceWidth,
-                            TileMode: descriptor.TileMode,
-                            DstSelect: descriptor.DstSelect,
-                            Sampler: sampler,
-                            WriteGeneration: hasWriteGeneration ? writeGeneration : -1,
-                            ArrayedView: true,
-                            ArrayLayers: arrayLayers,
-                            // Must match the identity the CPU path below ships, or
-                            // the presenter caches this texture under a different
-                            // key than IsTextureContentCached queries above and the
-                            // texel-copy skip never hits for non-2D descriptors.
-                            Type: descriptor.Type,
-                            Depth: textureDepth,
-                            TiledSource: tiledLayers,
-                            Detile: gpuArrayParams);
+                        texture = new GuestDrawTexture(
+                                        descriptor.Address,
+                                        descriptor.Width,
+                                        descriptor.Height,
+                                        descriptor.Format,
+                                        descriptor.NumberType,
+                                        [],
+                                        IsFallback: false,
+                                        IsStorage: false,
+                                        MipLevels: descriptor.MipLevels,
+                                        MipLevel: mipLevel,
+                                        BaseMipLevel: descriptor.ViewBaseLevel,
+                                        ResourceMipLevels: descriptor.ResourceMipLevels,
+                                        Pitch: sourceWidth,
+                                        TileMode: descriptor.TileMode,
+                                        DstSelect: descriptor.DstSelect,
+                                        Sampler: sampler,
+                                        WriteGeneration: hasWriteGeneration ? writeGeneration : -1,
+                                        ArrayedView: true,
+                                        ArrayLayers: arrayLayers,
+                                        // Must match the identity the CPU path below ships, or
+                                        // the presenter caches this texture under a different
+                                        // key than IsTextureContentCached queries above and the
+                                        // texel-copy skip never hits for non-2D descriptors.
+                                        Type: descriptor.Type,
+                                        Depth: textureDepth,
+                                        TiledSource: tiledLayers,
+                                        Detile: gpuArrayParams);
                         return true;
                     }
                 }
@@ -9863,27 +9867,27 @@ public static partial class AgcExports
                 if (uploadedLayers == arrayLayers)
                 {
                     NoteSampledAddress(descriptor.Address, descriptor.Format, descriptor.NumberType);
-            texture = new GuestDrawTexture(
-                        descriptor.Address,
-                        descriptor.Width,
-                        descriptor.Height,
-                        descriptor.Format,
-                        descriptor.NumberType,
-                        layered,
-                        IsFallback: false,
-                        IsStorage: false,
-                        MipLevels: descriptor.MipLevels,
-                        MipLevel: mipLevel,
-                        BaseMipLevel: descriptor.ViewBaseLevel,
-                        ResourceMipLevels: descriptor.ResourceMipLevels,
-                        Pitch: sourceWidth,
-                        TileMode: descriptor.TileMode,
-                        DstSelect: descriptor.DstSelect,
-                        Sampler: sampler,
-                        ArrayedView: true,
-                        ArrayLayers: arrayLayers,
-                        Type: descriptor.Type,
-                        Depth: textureDepth);
+                    texture = new GuestDrawTexture(
+                                descriptor.Address,
+                                descriptor.Width,
+                                descriptor.Height,
+                                descriptor.Format,
+                                descriptor.NumberType,
+                                layered,
+                                IsFallback: false,
+                                IsStorage: false,
+                                MipLevels: descriptor.MipLevels,
+                                MipLevel: mipLevel,
+                                BaseMipLevel: descriptor.ViewBaseLevel,
+                                ResourceMipLevels: descriptor.ResourceMipLevels,
+                                Pitch: sourceWidth,
+                                TileMode: descriptor.TileMode,
+                                DstSelect: descriptor.DstSelect,
+                                Sampler: sampler,
+                                ArrayedView: true,
+                                ArrayLayers: arrayLayers,
+                                Type: descriptor.Type,
+                                Depth: textureDepth);
                     return true;
                 }
             }
@@ -9967,29 +9971,29 @@ public static partial class AgcExports
                 (long)elementsWide * elementsHigh * bytesPerElement <= source.Length)
             {
                 NoteSampledAddress(descriptor.Address, descriptor.Format, descriptor.NumberType);
-            texture = new GuestDrawTexture(
-                    descriptor.Address,
-                    descriptor.Width,
-                    descriptor.Height,
-                    descriptor.Format,
-                    descriptor.NumberType,
-                    [],
-                    IsFallback: false,
-                    IsStorage: isStorage,
-                    MipLevels: descriptor.MipLevels,
-                    MipLevel: mipLevel,
-                    BaseMipLevel: descriptor.ViewBaseLevel,
-                    ResourceMipLevels: descriptor.ResourceMipLevels,
-                    Pitch: sourceWidth,
-                    TileMode: descriptor.TileMode,
-                    DstSelect: descriptor.DstSelect,
-                    Sampler: ToGuestSampler(samplerDescriptor),
-                    WriteGeneration: hasWriteGeneration ? writeGeneration : -1,
-                    ArrayedView: isArrayed,
-                    Type: descriptor.Type,
-                    Depth: textureDepth,
-                    TiledSource: source,
-                    Detile: gpuDetileParams);
+                texture = new GuestDrawTexture(
+                        descriptor.Address,
+                        descriptor.Width,
+                        descriptor.Height,
+                        descriptor.Format,
+                        descriptor.NumberType,
+                        [],
+                        IsFallback: false,
+                        IsStorage: isStorage,
+                        MipLevels: descriptor.MipLevels,
+                        MipLevel: mipLevel,
+                        BaseMipLevel: descriptor.ViewBaseLevel,
+                        ResourceMipLevels: descriptor.ResourceMipLevels,
+                        Pitch: sourceWidth,
+                        TileMode: descriptor.TileMode,
+                        DstSelect: descriptor.DstSelect,
+                        Sampler: ToGuestSampler(samplerDescriptor),
+                        WriteGeneration: hasWriteGeneration ? writeGeneration : -1,
+                        ArrayedView: isArrayed,
+                        Type: descriptor.Type,
+                        Depth: textureDepth,
+                        TiledSource: source,
+                        Detile: gpuDetileParams);
                 return true;
             }
         }
