@@ -1,3 +1,6 @@
+<!-- Copyright (C) 2026 SharpEmu Emulator Project -->
+<!-- SPDX-License-Identifier: GPL-2.0-or-later -->
+
 ## 2026-08-25 - VirtualMemory loop indexing optimization
 **Context:** Guest MMU / src/SharpEmu.Core/Memory/VirtualMemory.cs
 **Learning:** Standard `List<T>` indexing inside highly repetitive loop structures (`TryValidateRange`, `CopyFromRegions`, etc.) incurs measurable MSIL bounds-checking and virtual call overhead per element access.
