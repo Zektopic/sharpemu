@@ -25,3 +25,8 @@
 **Context:** `src/SharpEmu.Core/Memory/PhysicalVirtualMemory.cs`
 **Learning:** The `List<T>` indexer inside the `FindRegion` binary search hot path incurred bounds-checking and method-call overhead. Accessing it via `CollectionsMarshal.AsSpan` yielded a measurable decrease in execution time on millions of iterations.
 **Action:** Use `CollectionsMarshal.AsSpan` for hot path reads of `List<T>` instead of indexers when zero-allocation and bounds-checking elision is needed.
+
+## 2026-08-26 - Direct Span Access in Virtual Memory Search
+**Context:** `src/SharpEmu.Core/Memory/VirtualMemory.cs` (`FindInsertionIndex`)
+**Learning:** Standard C# `List<T>` accesses inside high-frequency binary searches introduce unnecessary overhead via indexer property access and bounds checking. The same optimization pattern recently used in `PhysicalVirtualMemory.cs` (commit 980b47b) applies directly to `VirtualMemory.cs`. Bypassing this via `CollectionsMarshal.AsSpan(list)` completely elides these checks, turning the operation into direct O(1) span memory access.
+**Action:** When optimizing binary search loops or hot paths over `List<T>`, immediately refactor to use `CollectionsMarshal.AsSpan()` to access elements and `span.Length` for bounds, alongside the `>>> 1` operator for division.

@@ -212,14 +212,16 @@ public sealed class VirtualMemory : IVirtualMemory
         }
     }
 
+    /// <remarks>Performance optimization: Elides List bounds checking via CollectionsMarshal.AsSpan for O(1) direct memory access during hot path binary search lookups.</remarks>
     private int FindInsertionIndex(ulong virtualAddress)
     {
+        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
         var lower = 0;
-        var upper = _regions.Count;
+        var upper = span.Length;
         while (lower < upper)
         {
-            var middle = lower + ((upper - lower) / 2);
-            if (_regions[middle].Region.VirtualAddress < virtualAddress)
+            var middle = lower + ((upper - lower) >>> 1);
+            if (span[middle].Region.VirtualAddress < virtualAddress)
             {
                 lower = middle + 1;
             }
