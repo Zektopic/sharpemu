@@ -119,6 +119,7 @@ public sealed class VirtualMemory : IVirtualMemory
         return true;
     }
 
+    /// <summary>Optimized using CollectionsMarshal.AsSpan to eliminate list indexing overhead in hot paths.</summary>
     private bool TryValidateRange(
         ulong virtualAddress,
         int length,
@@ -134,14 +135,16 @@ public sealed class VirtualMemory : IVirtualMemory
         var currentAddress = virtualAddress;
         var remaining = length;
         var currentIndex = regionIndex;
+        var regionsSpan = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
+
         while (true)
         {
-            if (currentIndex >= _regions.Count)
+            if ((uint)currentIndex >= (uint)regionsSpan.Length)
             {
                 return false;
             }
 
-            var region = _regions[currentIndex];
+            var region = regionsSpan[currentIndex];
             if (currentAddress < region.Region.VirtualAddress ||
                 currentAddress >= region.EndAddress ||
                 (region.Region.Protection & requiredProtection) == 0)
@@ -167,28 +170,34 @@ public sealed class VirtualMemory : IVirtualMemory
         }
     }
 
+    /// <summary>Optimized using CollectionsMarshal.AsSpan to eliminate list indexing overhead in hot paths.</summary>
     private int FindContainingRegionIndex(ulong virtualAddress)
     {
         var insertionIndex = FindInsertionIndex(virtualAddress);
-        if (insertionIndex < _regions.Count &&
-            _regions[insertionIndex].Region.VirtualAddress == virtualAddress)
+        var regionsSpan = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
+
+        if ((uint)insertionIndex < (uint)regionsSpan.Length &&
+            regionsSpan[insertionIndex].Region.VirtualAddress == virtualAddress)
         {
             return insertionIndex;
         }
 
         var candidateIndex = insertionIndex - 1;
-        return candidateIndex >= 0 && virtualAddress < _regions[candidateIndex].EndAddress
+        return candidateIndex >= 0 && virtualAddress < regionsSpan[candidateIndex].EndAddress
             ? candidateIndex
             : -1;
     }
 
+    /// <summary>Optimized using CollectionsMarshal.AsSpan to eliminate list indexing overhead in hot paths.</summary>
     private void CopyFromRegions(ulong virtualAddress, Span<byte> destination, int regionIndex)
     {
         var copied = 0;
         var currentAddress = virtualAddress;
+        var regionsSpan = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
+
         while (copied < destination.Length)
         {
-            var region = _regions[regionIndex++];
+            var region = regionsSpan[regionIndex++];
             var regionOffset = checked((int)(currentAddress - region.Region.VirtualAddress));
             var chunkLength = Math.Min(destination.Length - copied, region.BackingMemory.Length - regionOffset);
             region.BackingMemory.AsSpan(regionOffset, chunkLength).CopyTo(destination[copied..]);
@@ -197,13 +206,16 @@ public sealed class VirtualMemory : IVirtualMemory
         }
     }
 
+    /// <summary>Optimized using CollectionsMarshal.AsSpan to eliminate list indexing overhead in hot paths.</summary>
     private void CopyToRegions(ulong virtualAddress, ReadOnlySpan<byte> source, int regionIndex)
     {
         var copied = 0;
         var currentAddress = virtualAddress;
+        var regionsSpan = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
+
         while (copied < source.Length)
         {
-            var region = _regions[regionIndex++];
+            var region = regionsSpan[regionIndex++];
             var regionOffset = checked((int)(currentAddress - region.Region.VirtualAddress));
             var chunkLength = Math.Min(source.Length - copied, region.BackingMemory.Length - regionOffset);
             source.Slice(copied, chunkLength).CopyTo(region.BackingMemory.AsSpan(regionOffset, chunkLength));
@@ -212,14 +224,17 @@ public sealed class VirtualMemory : IVirtualMemory
         }
     }
 
+    /// <summary>Optimized binary search using AsSpan and right bit-shift for MSIL performance.</summary>
     private int FindInsertionIndex(ulong virtualAddress)
     {
         var lower = 0;
-        var upper = _regions.Count;
+        var regionsSpan = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
+        var upper = regionsSpan.Length;
+
         while (lower < upper)
         {
-            var middle = lower + ((upper - lower) / 2);
-            if (_regions[middle].Region.VirtualAddress < virtualAddress)
+            var middle = lower + ((upper - lower) >>> 1);
+            if (regionsSpan[middle].Region.VirtualAddress < virtualAddress)
             {
                 lower = middle + 1;
             }
