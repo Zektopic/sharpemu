@@ -2318,7 +2318,7 @@ internal static unsafe class VulkanVideoPresenter
             {
                 if (_latestPresentation is { } rej &&
                     rej.GuestImageAddress != 0 &&
-					rej.Sequence != presentedSequence &&
+                    rej.Sequence != presentedSequence &&
                     _tracedGuestImagePresentRejections.Add(rej.Sequence))
                 {
                     var reason = rej.Sequence == presentedSequence
@@ -2343,14 +2343,14 @@ internal static unsafe class VulkanVideoPresenter
 
     private static readonly HashSet<long> _tracedGuestImagePresentRejections = new();
 
-	private static bool HasPendingGuestPresentation(long presentedSequence)
-	{
-		lock (_gate)
-		{
-			return _pendingGuestImagePresentations.Count > 0 ||
-				_latestPresentation is { } latest && latest.Sequence > presentedSequence;
-		}
-	}
+    private static bool HasPendingGuestPresentation(long presentedSequence)
+    {
+        lock (_gate)
+        {
+            return _pendingGuestImagePresentations.Count > 0 ||
+                _latestPresentation is { } latest && latest.Sequence > presentedSequence;
+        }
+    }
 
     private static long EnqueueGuestWorkLocked(object work)
     {
@@ -2477,7 +2477,7 @@ internal static unsafe class VulkanVideoPresenter
         }
         else
         {
-        pendingQueue.AddLast(pending);
+            pendingQueue.AddLast(pending);
         }
         RecordGuestImageWritersLocked(work, sequence);
         _pendingGuestWorkCount++;
@@ -2594,29 +2594,120 @@ internal static unsafe class VulkanVideoPresenter
 
     private static void RecordGuestImageWritersLocked(object work, long sequence)
     {
-        static IEnumerable<ulong> StorageAddresses(
-            IReadOnlyList<GuestDrawTexture> textures) =>
-            textures
-                .Where(static texture => texture.IsStorage && texture.Address != 0)
-                .Select(static texture => texture.Address);
+        // Performance rationale: Replacing LINQ .Where/.Select/.Concat/.Distinct chain with an inline stackalloc
+        // buffer and manual uniqueness check strictly eliminates per-frame heap allocations and boxing overhead
+        // from enumerators and HashSets, improving CPU performance and lowering GC pressure in the rendering hot path.
+        Span<ulong> addresses = stackalloc ulong[128];
+        var addressCount = 0;
 
-        IEnumerable<ulong> addresses = work switch
+        switch (work)
         {
-            VulkanOffscreenGuestDraw draw =>
-                (draw.PublishTarget
-                    ? draw.Targets
-                        .Where(static target => target.Address != 0)
-                        .Select(static target => target.Address)
-                    : Enumerable.Empty<ulong>())
-                .Concat(StorageAddresses(draw.Draw.Textures)),
-            VulkanComputeGuestDispatch compute => StorageAddresses(compute.Textures),
-            VulkanGuestImageWrite imageWrite when imageWrite.Address != 0 =>
-                new[] { imageWrite.Address },
-            _ => Array.Empty<ulong>(),
-        };
-        foreach (var address in addresses.Distinct())
+            case VulkanOffscreenGuestDraw draw:
+                if (draw.PublishTarget)
+                {
+                    foreach (var target in draw.Targets)
+                    {
+                        if (target.Address == 0)
+                        {
+                            continue;
+                        }
+
+                        var found = false;
+                        for (var i = 0; i < addressCount; i++)
+                        {
+                            if (addresses[i] == target.Address)
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found && addressCount < addresses.Length)
+                        {
+                            addresses[addressCount++] = target.Address;
+                        }
+                    }
+                }
+
+                foreach (var texture in draw.Draw.Textures)
+                {
+                    if (texture.IsStorage)
+                    {
+                        if (texture.Address == 0)
+                        {
+                            continue;
+                        }
+
+                        var found = false;
+                        for (var i = 0; i < addressCount; i++)
+                        {
+                            if (addresses[i] == texture.Address)
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found && addressCount < addresses.Length)
+                        {
+                            addresses[addressCount++] = texture.Address;
+                        }
+                    }
+                }
+                break;
+
+            case VulkanComputeGuestDispatch compute:
+                foreach (var texture in compute.Textures)
+                {
+                    if (texture.IsStorage)
+                    {
+                        if (texture.Address == 0)
+                        {
+                            continue;
+                        }
+
+                        var found = false;
+                        for (var i = 0; i < addressCount; i++)
+                        {
+                            if (addresses[i] == texture.Address)
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found && addressCount < addresses.Length)
+                        {
+                            addresses[addressCount++] = texture.Address;
+                        }
+                    }
+                }
+                break;
+
+            case VulkanGuestImageWrite imageWrite:
+                if (imageWrite.Address != 0)
+                {
+                    var found = false;
+                    for (var i = 0; i < addressCount; i++)
+                    {
+                        if (addresses[i] == imageWrite.Address)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (!found && addressCount < addresses.Length)
+                    {
+                        addresses[addressCount++] = imageWrite.Address;
+                    }
+                }
+                break;
+        }
+
+        for (var index = 0; index < addressCount; index++)
         {
-            _guestImageWorkSequences[address] = sequence;
+            _guestImageWorkSequences[addresses[index]] = sequence;
         }
     }
 
@@ -8525,75 +8616,75 @@ internal static unsafe class VulkanVideoPresenter
             List<(ulong Address, uint Width, uint Height, ulong ByteCount)>? extents = null;
             if (syncEnabled)
             {
-            _ = Interlocked.Exchange(ref _cpuWrittenGuestImageSyncRequested, 0);
+                _ = Interlocked.Exchange(ref _cpuWrittenGuestImageSyncRequested, 0);
 
-            lock (_gate)
-            {
-                if (_guestImageExtents.Count > 0)
+                lock (_gate)
                 {
-                    extents = new(_guestImageExtents.Count);
-                    foreach (var entry in _guestImageExtents)
+                    if (_guestImageExtents.Count > 0)
                     {
-                        extents.Add((
-                            entry.Key,
-                            entry.Value.Width,
-                            entry.Value.Height,
-                            entry.Value.ByteCount));
+                        extents = new(_guestImageExtents.Count);
+                        foreach (var entry in _guestImageExtents)
+                        {
+                            extents.Add((
+                                entry.Key,
+                                entry.Value.Width,
+                                entry.Value.Height,
+                                entry.Value.ByteCount));
+                        }
                     }
                 }
-            }
 
-            var memory = _guestMemory;
-            if (extents is not null)
-            {
-                foreach (var (address, width, height, byteCount) in extents)
+                var memory = _guestMemory;
+                if (extents is not null)
                 {
-                    if (!SharpEmu.HLE.GuestImageWriteTracker.ConsumeDirty(address))
+                    foreach (var (address, width, height, byteCount) in extents)
                     {
-                        continue;
-                    }
-
-                    (dirtyAddresses ??= []).Add(address);
-                    if (memory is null ||
-                        byteCount == 0 ||
-                        byteCount > 128UL * 1024UL * 1024UL ||
-                        !_guestImages.TryGetValue(address, out var target))
-                    {
-                        continue;
-                    }
-
-                    // GPU-only RTs often get Dirty via page-overlap. A full
-                    // plane read/upload per false dirty destroys Dead Cells FPS
-                    // and can stall GTA after intro. Probe 4 KiB first unless
-                    // the surface is already known CPU-backed.
-                    if (!target.IsCpuBacked)
-                    {
-                        var probeLen = (int)Math.Min(byteCount, 4096UL);
-                        var probe = new byte[probeLen];
-                        if (!memory.TryRead(address, probe) ||
-                            probe.AsSpan().IndexOfAnyExcept((byte)0) < 0)
+                        if (!SharpEmu.HLE.GuestImageWriteTracker.ConsumeDirty(address))
                         {
                             continue;
                         }
 
-                        target.IsCpuBacked = true;
-                    }
+                        (dirtyAddresses ??= []).Add(address);
+                        if (memory is null ||
+                            byteCount == 0 ||
+                            byteCount > 128UL * 1024UL * 1024UL ||
+                            !_guestImages.TryGetValue(address, out var target))
+                        {
+                            continue;
+                        }
 
-                    var pixels = new byte[byteCount];
-                    if (!memory.TryRead(address, pixels) ||
-                        pixels.AsSpan().IndexOfAnyExcept((byte)0) < 0)
-                    {
-                        continue;
-                    }
+                        // GPU-only RTs often get Dirty via page-overlap. A full
+                        // plane read/upload per false dirty destroys Dead Cells FPS
+                        // and can stall GTA after intro. Probe 4 KiB first unless
+                        // the surface is already known CPU-backed.
+                        if (!target.IsCpuBacked)
+                        {
+                            var probeLen = (int)Math.Min(byteCount, 4096UL);
+                            var probe = new byte[probeLen];
+                            if (!memory.TryRead(address, probe) ||
+                                probe.AsSpan().IndexOfAnyExcept((byte)0) < 0)
+                            {
+                                continue;
+                            }
 
-                    UploadGuestImageInitialData(target, pixels);
-                    if (Interlocked.Increment(ref _guestImageCpuSyncTraceCount) <= 64)
-                    {
-                        Console.Error.WriteLine(
-                            $"[SYNC] cpu-write-drain addr=0x{address:X} {width}x{height}");
+                            target.IsCpuBacked = true;
+                        }
+
+                        var pixels = new byte[byteCount];
+                        if (!memory.TryRead(address, pixels) ||
+                            pixels.AsSpan().IndexOfAnyExcept((byte)0) < 0)
+                        {
+                            continue;
+                        }
+
+                        UploadGuestImageInitialData(target, pixels);
+                        if (Interlocked.Increment(ref _guestImageCpuSyncTraceCount) <= 64)
+                        {
+                            Console.Error.WriteLine(
+                                $"[SYNC] cpu-write-drain addr=0x{address:X} {width}x{height}");
+                        }
                     }
                 }
-            }
 
             }
 
@@ -10323,19 +10414,19 @@ internal static unsafe class VulkanVideoPresenter
         private static VertexBufferResource CreateVertexBufferAlias(
             VertexBufferResource shared,
             GuestVertexBuffer guestBuffer) => new()
-        {
-            Buffer = shared.Buffer,
-            Memory = shared.Memory,
-            OwnsBuffer = false,
-            Size = shared.Size,
-            Location = guestBuffer.Location,
-            ComponentCount = guestBuffer.ComponentCount,
-            DataFormat = guestBuffer.DataFormat,
-            NumberFormat = guestBuffer.NumberFormat,
-            Stride = guestBuffer.Stride,
-            OffsetBytes = guestBuffer.OffsetBytes,
-            PerInstance = guestBuffer.PerInstance,
-        };
+            {
+                Buffer = shared.Buffer,
+                Memory = shared.Memory,
+                OwnsBuffer = false,
+                Size = shared.Size,
+                Location = guestBuffer.Location,
+                ComponentCount = guestBuffer.ComponentCount,
+                DataFormat = guestBuffer.DataFormat,
+                NumberFormat = guestBuffer.NumberFormat,
+                Stride = guestBuffer.Stride,
+                OffsetBytes = guestBuffer.OffsetBytes,
+                PerInstance = guestBuffer.PerInstance,
+            };
 
         private VkBuffer CreateHostBuffer(
             ReadOnlySpan<byte> data,
@@ -17585,15 +17676,15 @@ internal static unsafe class VulkanVideoPresenter
                         $"present-{seq:D4}-{_extent.Width}x{_extent.Height}-{_swapchainFormat}.bgra");
                     File.WriteAllBytes(path, bytes.ToArray());
                     Console.Error.WriteLine($"[LOADER][TRACE] vk.swapchain_dump path={path}");
-					// Continuous readback is intentionally opt-in: each 1080p frame
-					// is several megabytes and synchronously waits for the GPU.
-					if (string.Equals(
-							Environment.GetEnvironmentVariable("SHARPEMU_GUEST_IMAGE_DUMP_CONTINUOUS"),
-							"1",
-							StringComparison.Ordinal))
-					{
-						_tracedPresentedSwapchain = false;
-					}
+                    // Continuous readback is intentionally opt-in: each 1080p frame
+                    // is several megabytes and synchronously waits for the GPU.
+                    if (string.Equals(
+                            Environment.GetEnvironmentVariable("SHARPEMU_GUEST_IMAGE_DUMP_CONTINUOUS"),
+                            "1",
+                            StringComparison.Ordinal))
+                    {
+                        _tracedPresentedSwapchain = false;
+                    }
                 }
             }
             finally
