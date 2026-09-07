@@ -20,3 +20,8 @@
 **Learning:** To guarantee 100% line and branch coverage on these critical internal data models, the most direct and reliable approach is to use reflection within standard xUnit tests. This circumvents the need to construct complex `CSharpCompilation` trees and invoke `CSharpGeneratorDriver` incrementally just to trigger `IEquatable` calls, reducing test brittleness and focusing on structural equality.
 
 **Action:** Created `ExportModelEqualityTests` in `SysAbiExportGeneratorTests.cs` using `GetNestedType` and `Activator.CreateInstance` to thoroughly test all branches of `ExportModel` equality logic, improving code reliability for the generator pipeline.
+
+## 2026-09-07 - Cross-Platform SIMD APIs for Portability
+**Context:** MetalDetilePass texture swizzling
+**Learning:** Using architecture-specific intrinsic classes (`Avx2`, `Neon`) can lead to type mismatch errors (e.g. `Vector256<uint>` vs `Vector256<short>`) and portability breaks when .NET versions rename namespaces (like `System.Runtime.Intrinsics.Arm.Neon` becoming `AdvSimd` or failing to resolve). The modern hardware-agnostic `Vector256<T>` and `Vector128<T>` APIs resolve these issues by handling cross-platform codegen implicitly.
+**Action:** Prefer `Vector256.ShiftRightLogical` and `Vector256.IsHardwareAccelerated` over explicit `Avx2` or `Neon` namespaces in numerical code.

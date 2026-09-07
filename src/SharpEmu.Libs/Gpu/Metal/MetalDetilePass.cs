@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 using System.Numerics;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 using SharpEmu.Libs.Agc;
 using SharpEmu.ShaderCompiler.Metal;
 
@@ -273,12 +275,39 @@ internal sealed unsafe class MetalDetilePass : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Replaces scalar coordinate math with SIMD vectorized swizzling to accelerate texture detiling formats.
+    /// Eliminates scalar loop overhead in hot paths during texture uploads by batching operations (Vector128/Vector256).
+    /// </summary>
     private static uint[] ToElementTerms(int[] byteTerms, int shift)
     {
         var terms = new uint[byteTerms.Length];
-        for (var index = 0; index < byteTerms.Length; index++)
+        var src = MemoryMarshal.Cast<int, uint>(byteTerms.AsSpan());
+        var dest = terms.AsSpan();
+        var index = 0;
+
+        if (Vector256.IsHardwareAccelerated)
         {
-            terms[index] = (uint)byteTerms[index] >> shift;
+            for (; index <= byteTerms.Length - 8; index += 8)
+            {
+                var vec = Vector256.LoadUnsafe(ref src[index]);
+                var shifted = Vector256.ShiftRightLogical(vec, shift);
+                shifted.StoreUnsafe(ref dest[index]);
+            }
+        }
+        else if (Vector128.IsHardwareAccelerated)
+        {
+            for (; index <= byteTerms.Length - 4; index += 4)
+            {
+                var vec = Vector128.LoadUnsafe(ref src[index]);
+                var shifted = Vector128.ShiftRightLogical(vec, shift);
+                shifted.StoreUnsafe(ref dest[index]);
+            }
+        }
+
+        for (; index < byteTerms.Length; index++)
+        {
+            dest[index] = src[index] >> shift;
         }
 
         return terms;
