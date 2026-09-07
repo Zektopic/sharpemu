@@ -119,14 +119,15 @@ public sealed class VirtualMemory : IVirtualMemory
         var currentAddress = virtualAddress;
         var remaining = length;
         var currentIndex = regionIndex;
-        while (true)
+        var regionsSpan = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
+        while (remaining > 0)
         {
-            if (currentIndex >= _regions.Count)
+            if ((uint)currentIndex >= (uint)regionsSpan.Length)
             {
                 return false;
             }
 
-            var region = _regions[currentIndex];
+            ref var region = ref regionsSpan[currentIndex];
             if (currentAddress < region.Region.VirtualAddress ||
                 currentAddress >= region.EndAddress ||
                 (region.Region.Protection & requiredProtection) == 0)
@@ -134,22 +135,13 @@ public sealed class VirtualMemory : IVirtualMemory
                 return false;
             }
 
-            if (remaining == 0)
-            {
-                return true;
-            }
-
             var available = region.EndAddress - currentAddress;
             var chunkLength = (int)Math.Min((ulong)remaining, available);
             remaining -= chunkLength;
-            if (remaining == 0)
-            {
-                return true;
-            }
-
             currentAddress += (ulong)chunkLength;
             currentIndex++;
         }
+        return true;
     }
 
     private int FindContainingRegionIndex(ulong virtualAddress)
