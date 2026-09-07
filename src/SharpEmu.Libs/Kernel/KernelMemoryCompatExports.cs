@@ -1126,10 +1126,23 @@ public static partial class KernelMemoryCompatExports
 
         if (count > 0 && !ctx.Memory.TryCopy(destination, source, (ulong)count))
         {
-            var payload = GC.AllocateUninitializedArray<byte>(count);
-            if (!TryReadCompat(ctx, source, payload) || !TryWriteCompat(ctx, destination, payload))
+            // OPTIMIZATION: Chunked copy to avoid large heap array allocations.
+            const int maxChunkSize = 4096;
+            Span<byte> chunk = stackalloc byte[maxChunkSize];
+            int offset = 0;
+
+            while (offset < count)
             {
-                return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT;
+                var readLength = Math.Min(count - offset, maxChunkSize);
+                var slice = chunk[..readLength];
+
+                if (!TryReadCompat(ctx, source + (ulong)offset, slice) ||
+                    !TryWriteCompat(ctx, destination + (ulong)offset, slice))
+                {
+                    return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT;
+                }
+
+                offset += readLength;
             }
         }
 
@@ -1387,22 +1400,35 @@ public static partial class KernelMemoryCompatExports
             return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_INVALID_ARGUMENT;
         }
 
-        Span<byte> leftByte = stackalloc byte[1];
-        Span<byte> rightByte = stackalloc byte[1];
-        for (var i = 0; i < count; i++)
+        // OPTIMIZATION: Read in chunks to minimize VirtualMemory lookups and lock contention.
+        const int maxChunkSize = 4096;
+        Span<byte> leftChunk = stackalloc byte[maxChunkSize];
+        Span<byte> rightChunk = stackalloc byte[maxChunkSize];
+        int offset = 0;
+
+        while (offset < count)
         {
-            if (!TryReadCompat(ctx, left + (ulong)i, leftByte) ||
-                !TryReadCompat(ctx, right + (ulong)i, rightByte))
+            var readLength = Math.Min(count - offset, maxChunkSize);
+            var leftSlice = leftChunk[..readLength];
+            var rightSlice = rightChunk[..readLength];
+
+            if (!TryReadCompat(ctx, left + (ulong)offset, leftSlice) ||
+                !TryReadCompat(ctx, right + (ulong)offset, rightSlice))
             {
                 return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT;
             }
 
-            var diff = leftByte[0] - rightByte[0];
-            if (diff != 0)
+            for (var i = 0; i < readLength; i++)
             {
-                ctx[CpuRegister.Rax] = unchecked((ulong)diff);
-                return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+                var diff = leftSlice[i] - rightSlice[i];
+                if (diff != 0)
+                {
+                    ctx[CpuRegister.Rax] = unchecked((ulong)diff);
+                    return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+                }
             }
+
+            offset += readLength;
         }
 
         ctx[CpuRegister.Rax] = 0;
