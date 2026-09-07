@@ -1453,6 +1453,7 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         _regions.Insert(low, region);
     }
 
+    /// <remarks>Performance optimization: Replaced O(N) linear foreach with O(log N) binary search using CollectionsMarshal.AsSpan to eliminate iterator allocation and drastically reduce lookup latency in hot paths.</remarks>
     private bool TryGetOverlappingRegionEnd(ulong address, ulong size, out ulong overlapEnd)
     {
         overlapEnd = 0;

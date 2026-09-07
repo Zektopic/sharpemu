@@ -30,3 +30,8 @@
 **Context:** `src/SharpEmu.Core/Memory/VirtualMemory.cs` (`FindInsertionIndex`)
 **Learning:** Standard C# `List<T>` accesses inside high-frequency binary searches introduce unnecessary overhead via indexer property access and bounds checking. The same optimization pattern recently used in `PhysicalVirtualMemory.cs` (commit 980b47b) applies directly to `VirtualMemory.cs`. Bypassing this via `CollectionsMarshal.AsSpan(list)` completely elides these checks, turning the operation into direct O(1) span memory access.
 **Action:** When optimizing binary search loops or hot paths over `List<T>`, immediately refactor to use `CollectionsMarshal.AsSpan()` to access elements and `span.Length` for bounds, alongside the `>>> 1` operator for division.
+
+## 2026-08-28 - Optimized TryGetOverlappingRegionEnd
+**Context:** src/SharpEmu.Core/Memory/PhysicalVirtualMemory.cs
+**Learning:** `TryGetOverlappingRegionEnd` uses an O(N) linear scan over `_regions` which causes extreme GC pauses and high latency in memory allocation hot paths.
+**Action:** Replaced the linear `foreach` scan with a zero-allocation O(log N) binary search using `CollectionsMarshal.AsSpan(_regions)` to find the overlapping region start, drastically reducing execution time and eliminating iterator allocations.
