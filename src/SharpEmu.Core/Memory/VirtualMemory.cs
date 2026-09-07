@@ -63,12 +63,20 @@ public sealed class VirtualMemory : IVirtualMemory
     }
 
     /// <summary>Reduces GC pressure by caching the array snapshot based on mapping generation.</summary>
+    /// <remarks>Performance optimization: Elides lock acquisition by using a volatile reference to the immutable cache record for lock-free cache reuse.</remarks>
     public IReadOnlyList<VirtualMemoryRegion> SnapshotRegions()
     {
+        var currentGeneration = Volatile.Read(ref _mappingGeneration);
+        var cache = _snapshotCache;
+        if (cache != null && cache.Generation == currentGeneration)
+        {
+            return cache.Regions;
+        }
+
         lock (_gate)
         {
-            var currentGeneration = _mappingGeneration;
-            var cache = _snapshotCache;
+            currentGeneration = _mappingGeneration;
+            cache = _snapshotCache;
             if (cache != null && cache.Generation == currentGeneration)
             {
                 return cache.Regions;
