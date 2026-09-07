@@ -3,6 +3,7 @@
 
 using SharpEmu.Core.Loader;
 using SharpEmu.HLE;
+using System.Runtime.InteropServices;
 
 namespace SharpEmu.Core.Memory;
 
@@ -60,10 +61,11 @@ public sealed class VirtualMemory : IVirtualMemory
     {
         lock (_gate)
         {
-            var snapshot = new VirtualMemoryRegion[_regions.Count];
-            for (var i = 0; i < _regions.Count; i++)
+            var span = CollectionsMarshal.AsSpan(_regions);
+            var snapshot = new VirtualMemoryRegion[span.Length];
+            for (var i = 0; i < span.Length; i++)
             {
-                snapshot[i] = _regions[i].Region;
+                snapshot[i] = span[i].Region;
             }
 
             return snapshot;
@@ -116,17 +118,18 @@ public sealed class VirtualMemory : IVirtualMemory
             return false;
         }
 
+        var span = CollectionsMarshal.AsSpan(_regions);
         var currentAddress = virtualAddress;
         var remaining = length;
         var currentIndex = regionIndex;
         while (true)
         {
-            if (currentIndex >= _regions.Count)
+            if (currentIndex >= span.Length)
             {
                 return false;
             }
 
-            var region = _regions[currentIndex];
+            var region = span[currentIndex];
             if (currentAddress < region.Region.VirtualAddress ||
                 currentAddress >= region.EndAddress ||
                 (region.Region.Protection & requiredProtection) == 0)
@@ -154,26 +157,28 @@ public sealed class VirtualMemory : IVirtualMemory
 
     private int FindContainingRegionIndex(ulong virtualAddress)
     {
+        var span = CollectionsMarshal.AsSpan(_regions);
         var insertionIndex = FindInsertionIndex(virtualAddress);
-        if (insertionIndex < _regions.Count &&
-            _regions[insertionIndex].Region.VirtualAddress == virtualAddress)
+        if (insertionIndex < span.Length &&
+            span[insertionIndex].Region.VirtualAddress == virtualAddress)
         {
             return insertionIndex;
         }
 
         var candidateIndex = insertionIndex - 1;
-        return candidateIndex >= 0 && virtualAddress < _regions[candidateIndex].EndAddress
+        return candidateIndex >= 0 && virtualAddress < span[candidateIndex].EndAddress
             ? candidateIndex
             : -1;
     }
 
     private void CopyFromRegions(ulong virtualAddress, Span<byte> destination, int regionIndex)
     {
+        var span = CollectionsMarshal.AsSpan(_regions);
         var copied = 0;
         var currentAddress = virtualAddress;
         while (copied < destination.Length)
         {
-            var region = _regions[regionIndex++];
+            var region = span[regionIndex++];
             var regionOffset = checked((int)(currentAddress - region.Region.VirtualAddress));
             var chunkLength = Math.Min(destination.Length - copied, region.BackingMemory.Length - regionOffset);
             region.BackingMemory.AsSpan(regionOffset, chunkLength).CopyTo(destination[copied..]);
@@ -184,11 +189,12 @@ public sealed class VirtualMemory : IVirtualMemory
 
     private void CopyToRegions(ulong virtualAddress, ReadOnlySpan<byte> source, int regionIndex)
     {
+        var span = CollectionsMarshal.AsSpan(_regions);
         var copied = 0;
         var currentAddress = virtualAddress;
         while (copied < source.Length)
         {
-            var region = _regions[regionIndex++];
+            var region = span[regionIndex++];
             var regionOffset = checked((int)(currentAddress - region.Region.VirtualAddress));
             var chunkLength = Math.Min(source.Length - copied, region.BackingMemory.Length - regionOffset);
             source.Slice(copied, chunkLength).CopyTo(region.BackingMemory.AsSpan(regionOffset, chunkLength));
@@ -197,14 +203,21 @@ public sealed class VirtualMemory : IVirtualMemory
         }
     }
 
+    /// <summary>
+    /// Finds the insertion index for a given virtual address using binary search.
+    /// Optimized with <see cref="CollectionsMarshal.AsSpan"/> and the unsigned right shift
+    /// operator (<c>&gt;&gt;&gt;</c>) to bypass bounds-checking and calculate the middle
+    /// index efficiently, avoiding MSIL instruction overhead in this hot path.
+    /// </summary>
     private int FindInsertionIndex(ulong virtualAddress)
     {
+        var span = CollectionsMarshal.AsSpan(_regions);
         var lower = 0;
-        var upper = _regions.Count;
+        var upper = span.Length;
         while (lower < upper)
         {
-            var middle = lower + ((upper - lower) / 2);
-            if (_regions[middle].Region.VirtualAddress < virtualAddress)
+            var middle = (lower + upper) >>> 1;
+            if (span[middle].Region.VirtualAddress < virtualAddress)
             {
                 lower = middle + 1;
             }
