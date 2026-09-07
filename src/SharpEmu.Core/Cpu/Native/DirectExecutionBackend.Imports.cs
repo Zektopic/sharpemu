@@ -526,7 +526,7 @@ public sealed partial class DirectExecutionBackend
 			{
 				byte[] array = new byte[64];
 				Marshal.Copy((nint)(num7 - 32), array, 0, array.Length);
-				Console.Error.WriteLine($"[LOADER][TRACE] __stack_chk_fail return-site @0x{num7:X16}: {BitConverter.ToString(array).Replace("-", " ")}");
+				Console.Error.WriteLine($"[LOADER][TRACE] __stack_chk_fail return-site @0x{num7:X16}: {FormatHexBytes(array)}");
 			}
 			catch
 			{

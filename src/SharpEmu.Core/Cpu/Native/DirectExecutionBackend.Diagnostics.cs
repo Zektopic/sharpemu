@@ -403,7 +403,7 @@ public sealed partial class DirectExecutionBackend
 		}
 	}
 
-	private unsafe static string FormatHexBytes(ReadOnlySpan<byte> bytes)
+	internal unsafe static string FormatHexBytes(ReadOnlySpan<byte> bytes)
 	{
 		if (bytes.Length == 0) return string.Empty;
 
