@@ -30,3 +30,7 @@
 **Context:** `src/SharpEmu.Core/Memory/VirtualMemory.cs` (`FindInsertionIndex`)
 **Learning:** Standard C# `List<T>` accesses inside high-frequency binary searches introduce unnecessary overhead via indexer property access and bounds checking. The same optimization pattern recently used in `PhysicalVirtualMemory.cs` (commit 980b47b) applies directly to `VirtualMemory.cs`. Bypassing this via `CollectionsMarshal.AsSpan(list)` completely elides these checks, turning the operation into direct O(1) span memory access.
 **Action:** When optimizing binary search loops or hot paths over `List<T>`, immediately refactor to use `CollectionsMarshal.AsSpan()` to access elements and `span.Length` for bounds, alongside the `>>> 1` operator for division.
+## 2026-09-08 - Optimized VirtualMemory TryValidateRange Hot Loop
+**Context:** `src/SharpEmu.Core/Memory/VirtualMemory.cs`
+**Learning:** Guest MMU memory checks running on every simulated read/write can incur high overhead from implicit `List<T>` bounds checking. The synchronization model of `VirtualMemory` uses an explicit `lock(_gate)` around list structural mutations, which allows using `CollectionsMarshal.AsSpan` during reads inside the same lock without risk of tearing.
+**Action:** Replace sequential `.Count` checks and indexer access with `.AsSpan()` and `ref var` to bypass index bounds validation and structure boxing.
