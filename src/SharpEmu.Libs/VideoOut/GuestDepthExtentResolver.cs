@@ -36,13 +36,21 @@ internal static class GuestDepthExtentResolver
                 depth.Width,
                 depth.Height);
         }
+        GuestDrawTexture? matchingTexture = null;
+        for (int i = 0; i < textures.Count; i++)
+        {
+            var texture = textures[i];
+            if ((texture.Address == depth.Address ||
+                 texture.Address == depth.ReadAddress ||
+                 texture.Address == depth.WriteAddress) &&
+                texture.Width >= colorWidth &&
+                texture.Height >= colorHeight)
+            {
+                matchingTexture = texture;
+                break;
+            }
+        }
 
-        var matchingTexture = textures.FirstOrDefault(texture =>
-            (texture.Address == depth.Address ||
-             texture.Address == depth.ReadAddress ||
-             texture.Address == depth.WriteAddress) &&
-            texture.Width >= colorWidth &&
-            texture.Height >= colorHeight);
         if (matchingTexture is not null)
         {
             return new GuestDepthExtentResolution(
