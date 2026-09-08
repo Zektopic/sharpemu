@@ -1466,8 +1466,27 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         _gate.EnterReadLock();
         try
         {
-            foreach (var region in _regions)
+            var span = CollectionsMarshal.AsSpan(_regions);
+            var low = 0;
+            var high = span.Length - 1;
+            var startIdx = span.Length;
+            while (low <= high)
             {
+                var mid = low + ((high - low) >>> 1);
+                if (span[mid].VirtualAddress + span[mid].Size > address)
+                {
+                    startIdx = mid;
+                    high = mid - 1;
+                }
+                else
+                {
+                    low = mid + 1;
+                }
+            }
+
+            for (var i = startIdx; i < span.Length; i++)
+            {
+                var region = span[i];
                 var regionEnd = region.VirtualAddress + region.Size;
                 if (region.VirtualAddress >= end)
                 {
