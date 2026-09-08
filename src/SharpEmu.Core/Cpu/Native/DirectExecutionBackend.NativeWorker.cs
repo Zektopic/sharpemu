@@ -83,16 +83,7 @@ public sealed partial class DirectExecutionBackend
 	{
 		// Limit in-flight native Runs before renting so the idle pool is not
 		// drained by threads blocked on the concurrency gate.
-		var spin = new SpinWait();
-		while (!_nativeWorkerRunLimiter.Wait(0))
-		{
-			if (spin.NextSpinWillYield)
-			{
-				_nativeWorkerRunLimiter.Wait();
-				break;
-			}
-			spin.SpinOnce();
-		}
+		_nativeWorkerRunLimiter.Wait();
 		NativeGuestExecutor? worker = null;
 		try
 		{
