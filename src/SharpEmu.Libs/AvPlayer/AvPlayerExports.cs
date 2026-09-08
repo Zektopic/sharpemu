@@ -10,6 +10,8 @@ using System.Text;
 
 namespace SharpEmu.Libs.AvPlayer;
 
+// Copyright (C) 2026 SharpEmu Emulator Project
+// SPDX-License-Identifier: GPL-2.0-or-later
 public static class AvPlayerExports
 {
     private const int InvalidParameters = unchecked((int)0x806A0001);
@@ -1339,6 +1341,19 @@ public static class AvPlayerExports
 
         normalized = guestPath;
         return !removedParent || guestPath.Contains('/');
+    }
+
+    public static bool TryGetFallbackPresentationFrame(
+        out byte[] pixels,
+        out uint width,
+        out uint height,
+        out ulong serial)
+    {
+        pixels = Array.Empty<byte>();
+        width = 0;
+        height = 0;
+        serial = 0;
+        return false;
     }
 
     private static bool TryDecodeFileReference(string encoded, out string decoded)
