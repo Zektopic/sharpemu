@@ -2807,29 +2807,43 @@ internal static unsafe class VulkanVideoPresenter
 
     private static void RecordGuestImageWritersLocked(object work, long sequence)
     {
-        static IEnumerable<ulong> StorageAddresses(
-            IReadOnlyList<GuestDrawTexture> textures) =>
-            textures
-                .Where(static texture => texture.IsStorage && texture.Address != 0)
-                .Select(static texture => texture.Address);
+        if (work is VulkanOffscreenGuestDraw draw)
+        {
+            if (draw.PublishTarget)
+            {
+                for (var i = 0; i < draw.Targets.Count; i++)
+                {
+                    var target = draw.Targets[i];
+                    if (target.Address != 0)
+                    {
+                        _guestImageWorkSequences[target.Address] = sequence;
+                    }
+                }
+            }
 
-        IEnumerable<ulong> addresses = work switch
+            for (var i = 0; i < draw.Draw.Textures.Count; i++)
+            {
+                var texture = draw.Draw.Textures[i];
+                if (texture.IsStorage && texture.Address != 0)
+                {
+                    _guestImageWorkSequences[texture.Address] = sequence;
+                }
+            }
+        }
+        else if (work is VulkanComputeGuestDispatch compute)
         {
-            VulkanOffscreenGuestDraw draw =>
-                (draw.PublishTarget
-                    ? draw.Targets
-                        .Where(static target => target.Address != 0)
-                        .Select(static target => target.Address)
-                    : Enumerable.Empty<ulong>())
-                .Concat(StorageAddresses(draw.Draw.Textures)),
-            VulkanComputeGuestDispatch compute => StorageAddresses(compute.Textures),
-            VulkanGuestImageWrite imageWrite when imageWrite.Address != 0 =>
-                new[] { imageWrite.Address },
-            _ => Array.Empty<ulong>(),
-        };
-        foreach (var address in addresses.Distinct())
+            for (var i = 0; i < compute.Textures.Count; i++)
+            {
+                var texture = compute.Textures[i];
+                if (texture.IsStorage && texture.Address != 0)
+                {
+                    _guestImageWorkSequences[texture.Address] = sequence;
+                }
+            }
+        }
+        else if (work is VulkanGuestImageWrite imageWrite && imageWrite.Address != 0)
         {
-            _guestImageWorkSequences[address] = sequence;
+            _guestImageWorkSequences[imageWrite.Address] = sequence;
         }
     }
 
