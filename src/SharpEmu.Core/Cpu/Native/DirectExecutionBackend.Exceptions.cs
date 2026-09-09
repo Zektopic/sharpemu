@@ -362,7 +362,7 @@ public sealed partial class DirectExecutionBackend
 					byte[] code = new byte[16];
 					if (TryReadHostBytes(rip, code))
 					{
-						Console.Error.WriteLine("[LOADER][INFO]   Code at RIP: " + BitConverter.ToString(code).Replace("-", " "));
+						Console.Error.WriteLine("[LOADER][INFO]   Code at RIP: " + FormatHexBytes(code));
 						if (code[0] == 100)
 						{
 							Console.Error.WriteLine("[LOADER][ERROR]   Detected FS segment prefix - TLS access not patched!");
@@ -380,12 +380,12 @@ public sealed partial class DirectExecutionBackend
 						byte[] before = new byte[16];
 						if (rip > 16 && TryReadHostBytes(rip - 16, before))
 						{
-							Console.Error.WriteLine("[LOADER][INFO]   Code before RIP: " + BitConverter.ToString(before).Replace("-", " "));
+							Console.Error.WriteLine("[LOADER][INFO]   Code before RIP: " + FormatHexBytes(before));
 						}
 						byte[] window = new byte[64];
 						if (rip > 32 && TryReadHostBytes(rip - 32, window))
 						{
-							Console.Error.WriteLine("[LOADER][INFO]   Code window [RIP-0x20..]: " + BitConverter.ToString(window).Replace("-", " "));
+							Console.Error.WriteLine("[LOADER][INFO]   Code window [RIP-0x20..]: " + FormatHexBytes(window));
 						}
 						for (var stackIndex = 0; stackIndex < 16; stackIndex++)
 						{
@@ -404,7 +404,7 @@ public sealed partial class DirectExecutionBackend
 							{
 								Console.Error.WriteLine(
 									$"[LOADER][INFO]   Stack guest-code candidate [rsp+0x{stackIndex * 8:X2}]=0x{candidate:X16}, bytes [-0x18..]: " +
-									BitConverter.ToString(callSiteWindow).Replace("-", " "));
+									FormatHexBytes(callSiteWindow));
 							}
 						}
 					}
@@ -434,7 +434,7 @@ public sealed partial class DirectExecutionBackend
 					byte[] illegalCode = new byte[16];
 					if (TryReadHostBytes(rip, illegalCode))
 					{
-						Console.Error.WriteLine("[LOADER][INFO]   Code at RIP: " + BitConverter.ToString(illegalCode).Replace("-", " "));
+						Console.Error.WriteLine("[LOADER][INFO]   Code at RIP: " + FormatHexBytes(illegalCode));
 					}
 					DumpRecentImportTrace();
 					DumpGuestDisasmDiagnostics(rip, rbp, rsp);

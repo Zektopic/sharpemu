@@ -6860,11 +6860,11 @@ public sealed unsafe partial class DirectExecutionBackend : INativeCpuBackend, I
 			Span<byte> destination = stackalloc byte[16];
 			if (cpuContext.Memory.TryRead(cpuContext.Rip, destination))
 			{
-				Console.Error.WriteLine($"[LOADER][ERROR] Stall bytes @rip: {BitConverter.ToString(destination.ToArray()).Replace("-", " ")}");
+				Console.Error.WriteLine($"[LOADER][ERROR] Stall bytes @rip: {FormatHexBytes(destination)}");
 			}
 			else if (cpuContext.Memory.TryRead(num, destination))
 			{
-				Console.Error.WriteLine($"[LOADER][ERROR] Stall bytes @rip_align: {BitConverter.ToString(destination.ToArray()).Replace("-", " ")}");
+				Console.Error.WriteLine($"[LOADER][ERROR] Stall bytes @rip_align: {FormatHexBytes(destination)}");
 			}
 			if (rsp != 0 && cpuContext.TryReadUInt64(rsp, out var value) && cpuContext.TryReadUInt64(rsp + 8, out var value2))
 			{
