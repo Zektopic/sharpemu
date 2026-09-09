@@ -2607,25 +2607,12 @@ internal static unsafe class VulkanVideoPresenter
                 {
                     foreach (var target in draw.Targets)
                     {
-                        if (target.Address == 0)
-                        {
-                            continue;
-                        }
-
+                        if (target.Address == 0) continue;
                         var found = false;
                         for (var i = 0; i < addressCount; i++)
-                        {
-                            if (addresses[i] == target.Address)
-                            {
-                                found = true;
-                                break;
-                            }
-                        }
-
+                            if (addresses[i] == target.Address) { found = true; break; }
                         if (!found && addressCount < addresses.Length)
-                        {
                             addresses[addressCount++] = target.Address;
-                        }
                     }
                 }
 
@@ -2633,25 +2620,12 @@ internal static unsafe class VulkanVideoPresenter
                 {
                     if (texture.IsStorage)
                     {
-                        if (texture.Address == 0)
-                        {
-                            continue;
-                        }
-
+                        if (texture.Address == 0) continue;
                         var found = false;
                         for (var i = 0; i < addressCount; i++)
-                        {
-                            if (addresses[i] == texture.Address)
-                            {
-                                found = true;
-                                break;
-                            }
-                        }
-
+                            if (addresses[i] == texture.Address) { found = true; break; }
                         if (!found && addressCount < addresses.Length)
-                        {
                             addresses[addressCount++] = texture.Address;
-                        }
                     }
                 }
                 break;
@@ -2661,25 +2635,12 @@ internal static unsafe class VulkanVideoPresenter
                 {
                     if (texture.IsStorage)
                     {
-                        if (texture.Address == 0)
-                        {
-                            continue;
-                        }
-
+                        if (texture.Address == 0) continue;
                         var found = false;
                         for (var i = 0; i < addressCount; i++)
-                        {
-                            if (addresses[i] == texture.Address)
-                            {
-                                found = true;
-                                break;
-                            }
-                        }
-
+                            if (addresses[i] == texture.Address) { found = true; break; }
                         if (!found && addressCount < addresses.Length)
-                        {
                             addresses[addressCount++] = texture.Address;
-                        }
                     }
                 }
                 break;
@@ -2689,18 +2650,9 @@ internal static unsafe class VulkanVideoPresenter
                 {
                     var found = false;
                     for (var i = 0; i < addressCount; i++)
-                    {
-                        if (addresses[i] == imageWrite.Address)
-                        {
-                            found = true;
-                            break;
-                        }
-                    }
-
+                        if (addresses[i] == imageWrite.Address) { found = true; break; }
                     if (!found && addressCount < addresses.Length)
-                    {
                         addresses[addressCount++] = imageWrite.Address;
-                    }
                 }
                 break;
         }
