@@ -2549,34 +2549,11 @@ internal static unsafe class VulkanVideoPresenter
         out uint width,
         out uint height)
     {
-        if (!AvPlayerExports.TryGetFallbackPresentationFrame(
-                out pixels,
-                out width,
-                out height,
-                out var serial))
-        {
-            return false;
-        }
-
-        if (Interlocked.Exchange(
-                ref _tracedAvPlayerFallbackPresentationSerial,
-                serial) != serial)
-        {
-            var frameCount = Interlocked.Increment(
-                ref _avPlayerFallbackPresentationCount);
-            if (frameCount <= 4 || frameCount % 30 == 0)
-            {
-                Console.Error.WriteLine(
-                    "[VIDEOOUT][INFO] AvPlayer host fallback frame presented: " +
-                    $"frame={frameCount} serial={serial} size={width}x{height}.");
-            }
-        }
-
-        return true;
+        pixels = [];
+        width = 0;
+        height = 0;
+        return false;
     }
-
-    private static long _tracedAvPlayerFallbackPresentationSerial;
-    private static long _avPlayerFallbackPresentationCount;
     private static readonly HashSet<long> _tracedGuestImagePresentRejections = new();
 
 	private static bool HasPendingGuestPresentation(long presentedSequence)
