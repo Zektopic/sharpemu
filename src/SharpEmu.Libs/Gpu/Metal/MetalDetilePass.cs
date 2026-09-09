@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 using System.Numerics;
-using System.Runtime.InteropServices;
-using System.Runtime.Intrinsics;
 using SharpEmu.Libs.Agc;
 using SharpEmu.ShaderCompiler.Metal;
 
@@ -35,6 +33,9 @@ internal sealed unsafe class MetalDetilePass : IDisposable
     private nint _pipelineState;
     private bool _initialized;
     private bool _disposed;
+
+    private readonly Dictionary<(int[], int), nint> _xorTermBuffers = new();
+    private nint _placeholderTermBuffer;
 
     public MetalDetilePass(nint device)
     {
@@ -85,54 +86,46 @@ internal sealed unsafe class MetalDetilePass : IDisposable
         // element stride is the whole buffer split evenly by layer.
         var srcSliceElements = (uint)((ulong)tiled.Length / bytesPerElement / layers);
 
+        var newBufferWithBytes = MetalNative.Selector("newBufferWithBytes:length:options:");
+        var newBufferWithLength = MetalNative.Selector("newBufferWithLength:options:");
+
         // Binding 1 carries the within-block offset table. ExactXor: element-shifted
         // X/Y byte terms. BlockTable: GetDetileParams' block table (already element
         // offsets) in binding 1, a placeholder in binding 2. The two equations index
         // different-sized buffers, so the kernel branches and reads only one.
-        uint[] xTerm;
-        uint[] yTerm;
+        nint xBuffer;
+        nint yBuffer;
         uint equationValue;
         if (parameters.Equation == DetileEquation.BlockTable)
         {
-            xTerm = new uint[parameters.BlockTable.Length];
+            var xTerm = new uint[parameters.BlockTable.Length];
             for (var index = 0; index < xTerm.Length; index++)
             {
                 xTerm[index] = (uint)parameters.BlockTable[index];
             }
 
-            yTerm = [0];
+            fixed (uint* xPointer = xTerm)
+            {
+                xBuffer = MetalNative.SendBuffer(
+                    _device, newBufferWithBytes, (nint)xPointer, (nuint)xTerm.Length * sizeof(uint), 0);
+            }
+
+            yBuffer = GetPlaceholderTermBuffer();
             equationValue = 1;
         }
         else
         {
             var shift = BitOperations.TrailingZeroCount((uint)parameters.BytesPerElement);
-            xTerm = ToElementTerms(parameters.XByteTerm, shift);
-            yTerm = ToElementTerms(parameters.YByteTerm, shift);
+            xBuffer = GetTermBuffer(_xorTermBuffers, parameters.XByteTerm, shift);
+            yBuffer = GetTermBuffer(_xorTermBuffers, parameters.YByteTerm, shift);
             equationValue = 0;
         }
 
-        var newBufferWithBytes = MetalNative.Selector("newBufferWithBytes:length:options:");
-        var newBufferWithLength = MetalNative.Selector("newBufferWithLength:options:");
-
         nint tiledBuffer;
-        nint xBuffer;
-        nint yBuffer;
         fixed (byte* tiledPointer = tiled)
         {
             tiledBuffer = MetalNative.SendBuffer(
                 _device, newBufferWithBytes, (nint)tiledPointer, (nuint)tiled.Length, 0);
-        }
-
-        fixed (uint* xPointer = xTerm)
-        {
-            xBuffer = MetalNative.SendBuffer(
-                _device, newBufferWithBytes, (nint)xPointer, (nuint)xTerm.Length * sizeof(uint), 0);
-        }
-
-        fixed (uint* yPointer = yTerm)
-        {
-            yBuffer = MetalNative.SendBuffer(
-                _device, newBufferWithBytes, (nint)yPointer, (nuint)yTerm.Length * sizeof(uint), 0);
         }
 
         var outputBytes = (nuint)elementsWide * elementsHigh * bytesPerElement * layers;
@@ -219,8 +212,50 @@ internal sealed unsafe class MetalDetilePass : IDisposable
 
         MetalNative.SendVoid(blit, MetalNative.Selector("endEncoding"));
 
-        transientBuffers = [tiledBuffer, xBuffer, yBuffer, outputBuffer, paramsBuffer];
+        if (parameters.Equation == DetileEquation.BlockTable)
+        {
+            transientBuffers = [tiledBuffer, outputBuffer, paramsBuffer, xBuffer];
+        }
+        else
+        {
+            transientBuffers = [tiledBuffer, outputBuffer, paramsBuffer];
+        }
+
         return true;
+    }
+
+    private nint GetTermBuffer(Dictionary<(int[], int), nint> cache, int[] table, int shift)
+    {
+        var key = (table, shift);
+        if (cache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        var terms = ToElementTerms(table, shift);
+        var byteSize = (nuint)terms.Length * sizeof(uint);
+        var newBufferWithBytes = MetalNative.Selector("newBufferWithBytes:length:options:");
+        nint buffer;
+        fixed (uint* ptr = terms)
+        {
+            buffer = MetalNative.SendBuffer(_device, newBufferWithBytes, (nint)ptr, byteSize, 0);
+        }
+
+        cache[key] = buffer;
+        return buffer;
+    }
+
+    private nint GetPlaceholderTermBuffer()
+    {
+        if (_placeholderTermBuffer != 0)
+        {
+            return _placeholderTermBuffer;
+        }
+
+        var newBufferWithBytes = MetalNative.Selector("newBufferWithBytes:length:options:");
+        uint zero = 0;
+        _placeholderTermBuffer = MetalNative.SendBuffer(_device, newBufferWithBytes, (nint)(&zero), sizeof(uint), 0);
+        return _placeholderTermBuffer;
     }
 
     private bool EnsurePipeline()
@@ -275,39 +310,12 @@ internal sealed unsafe class MetalDetilePass : IDisposable
         return true;
     }
 
-    /// <summary>
-    /// Replaces scalar coordinate math with SIMD vectorized swizzling to accelerate texture detiling formats.
-    /// Eliminates scalar loop overhead in hot paths during texture uploads by batching operations (Vector128/Vector256).
-    /// </summary>
     private static uint[] ToElementTerms(int[] byteTerms, int shift)
     {
         var terms = new uint[byteTerms.Length];
-        var src = MemoryMarshal.Cast<int, uint>(byteTerms.AsSpan());
-        var dest = terms.AsSpan();
-        var index = 0;
-
-        if (Vector256.IsHardwareAccelerated)
+        for (var index = 0; index < byteTerms.Length; index++)
         {
-            for (; index <= byteTerms.Length - 8; index += 8)
-            {
-                var vec = Vector256.LoadUnsafe(ref src[index]);
-                var shifted = Vector256.ShiftRightLogical(vec, shift);
-                shifted.StoreUnsafe(ref dest[index]);
-            }
-        }
-        else if (Vector128.IsHardwareAccelerated)
-        {
-            for (; index <= byteTerms.Length - 4; index += 4)
-            {
-                var vec = Vector128.LoadUnsafe(ref src[index]);
-                var shifted = Vector128.ShiftRightLogical(vec, shift);
-                shifted.StoreUnsafe(ref dest[index]);
-            }
-        }
-
-        for (; index < byteTerms.Length; index++)
-        {
-            dest[index] = src[index] >> shift;
+            terms[index] = (uint)byteTerms[index] >> shift;
         }
 
         return terms;
@@ -333,10 +341,24 @@ internal sealed unsafe class MetalDetilePass : IDisposable
         }
 
         _disposed = true;
+
+        var release = MetalNative.Selector("release");
         if (_pipelineState != 0)
         {
-            MetalNative.SendVoid(_pipelineState, MetalNative.Selector("release"));
+            MetalNative.SendVoid(_pipelineState, release);
             _pipelineState = 0;
+        }
+
+        foreach (var buffer in _xorTermBuffers.Values)
+        {
+            MetalNative.SendVoid(buffer, release);
+        }
+        _xorTermBuffers.Clear();
+
+        if (_placeholderTermBuffer != 0)
+        {
+            MetalNative.SendVoid(_placeholderTermBuffer, release);
+            _placeholderTermBuffer = 0;
         }
     }
 }
