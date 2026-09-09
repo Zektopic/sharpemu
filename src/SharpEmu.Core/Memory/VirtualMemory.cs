@@ -139,17 +139,18 @@ public sealed class VirtualMemory : IVirtualMemory
             return false;
         }
 
+        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
         var currentAddress = virtualAddress;
         var remaining = length;
         var currentIndex = regionIndex;
         while (true)
         {
-            if (currentIndex >= _regions.Count)
+            if (currentIndex >= span.Length)
             {
                 return false;
             }
 
-            var region = _regions[currentIndex];
+            ref var region = ref span[currentIndex];
             if (currentAddress < region.Region.VirtualAddress ||
                 currentAddress >= region.EndAddress ||
                 (region.Region.Protection & requiredProtection) == 0)
@@ -177,26 +178,28 @@ public sealed class VirtualMemory : IVirtualMemory
 
     private int FindContainingRegionIndex(ulong virtualAddress)
     {
+        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
         var insertionIndex = FindInsertionIndex(virtualAddress);
-        if (insertionIndex < _regions.Count &&
-            _regions[insertionIndex].Region.VirtualAddress == virtualAddress)
+        if (insertionIndex < span.Length &&
+            span[insertionIndex].Region.VirtualAddress == virtualAddress)
         {
             return insertionIndex;
         }
 
         var candidateIndex = insertionIndex - 1;
-        return candidateIndex >= 0 && virtualAddress < _regions[candidateIndex].EndAddress
+        return candidateIndex >= 0 && virtualAddress < span[candidateIndex].EndAddress
             ? candidateIndex
             : -1;
     }
 
     private void CopyFromRegions(ulong virtualAddress, Span<byte> destination, int regionIndex)
     {
+        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
         var copied = 0;
         var currentAddress = virtualAddress;
         while (copied < destination.Length)
         {
-            var region = _regions[regionIndex++];
+            ref var region = ref span[regionIndex++];
             var regionOffset = checked((int)(currentAddress - region.Region.VirtualAddress));
             var chunkLength = Math.Min(destination.Length - copied, region.BackingMemory.Length - regionOffset);
             region.BackingMemory.AsSpan(regionOffset, chunkLength).CopyTo(destination[copied..]);
@@ -207,11 +210,12 @@ public sealed class VirtualMemory : IVirtualMemory
 
     private void CopyToRegions(ulong virtualAddress, ReadOnlySpan<byte> source, int regionIndex)
     {
+        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
         var copied = 0;
         var currentAddress = virtualAddress;
         while (copied < source.Length)
         {
-            var region = _regions[regionIndex++];
+            ref var region = ref span[regionIndex++];
             var regionOffset = checked((int)(currentAddress - region.Region.VirtualAddress));
             var chunkLength = Math.Min(source.Length - copied, region.BackingMemory.Length - regionOffset);
             source.Slice(copied, chunkLength).CopyTo(region.BackingMemory.AsSpan(regionOffset, chunkLength));
