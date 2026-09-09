@@ -30,11 +30,3 @@
 **Context:** `src/SharpEmu.Core/Memory/VirtualMemory.cs` (`FindInsertionIndex`)
 **Learning:** Standard C# `List<T>` accesses inside high-frequency binary searches introduce unnecessary overhead via indexer property access and bounds checking. The same optimization pattern recently used in `PhysicalVirtualMemory.cs` (commit 980b47b) applies directly to `VirtualMemory.cs`. Bypassing this via `CollectionsMarshal.AsSpan(list)` completely elides these checks, turning the operation into direct O(1) span memory access.
 **Action:** When optimizing binary search loops or hot paths over `List<T>`, immediately refactor to use `CollectionsMarshal.AsSpan()` to access elements and `span.Length` for bounds, alongside the `>>> 1` operator for division.
-## 2026-09-04 - Zero-Allocation Memcpy Fallback
-**Context:** `src/SharpEmu.Libs/Kernel/KernelMemoryCompatExports.cs` -> `Memcpy`
-**Learning:** The fallback logic in `Memcpy` (when `TryCopy` fails or returns false) allocates an array with `GC.AllocateUninitializedArray<byte>(count)`. This can cause massive GC pressure on hot paths, especially since `Memcpy` might be called heavily by the guest.
-**Action:** Optimize `Memcpy` fallback by reading/writing in chunks via a stack-allocated buffer or ArrayPool, similar to what is done in `Memchr`.
-## 2026-09-04 - Optimization of Memcmp
-**Context:** `src/SharpEmu.Libs/Kernel/KernelMemoryCompatExports.cs` -> `Memcmp`
-**Learning:** The `Memcmp` implementation reads one byte at a time through `TryReadCompat`. This means one lock acquisition per byte read (in `PhysicalVirtualMemory`). This causes extreme lock contention and CPU overhead for larger reads.
-**Action:** Optimize `Memcmp` by reading memory in 4096-byte stackalloc chunks, reducing overhead and lock contention from O(N) to O(N/4096). This matches the pattern in `TryCompareStringsCaseInsensitive` and `Memchr`.
