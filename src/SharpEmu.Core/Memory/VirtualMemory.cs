@@ -127,6 +127,7 @@ public sealed class VirtualMemory : IVirtualMemory
         return true;
     }
 
+    /// <remarks>Performance optimization: Elides Math.Min calls, redundant branch checks, and casting inside the hot path validation loop for optimal MSIL generation.</remarks>
     private bool TryValidateRange(
         ulong virtualAddress,
         int length,
@@ -141,16 +142,11 @@ public sealed class VirtualMemory : IVirtualMemory
 
         var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
         var currentAddress = virtualAddress;
-        var remaining = length;
-        var currentIndex = regionIndex;
-        while (true)
-        {
-            if (currentIndex >= span.Length)
-            {
-                return false;
-            }
+        var remaining = (ulong)length;
 
-            ref var region = ref span[currentIndex];
+        for (var i = regionIndex; i < span.Length; i++)
+        {
+            ref var region = ref span[i];
             if (currentAddress < region.Region.VirtualAddress ||
                 currentAddress >= region.EndAddress ||
                 (region.Region.Protection & requiredProtection) == 0)
@@ -158,22 +154,17 @@ public sealed class VirtualMemory : IVirtualMemory
                 return false;
             }
 
-            if (remaining == 0)
-            {
-                return true;
-            }
-
             var available = region.EndAddress - currentAddress;
-            var chunkLength = (int)Math.Min((ulong)remaining, available);
-            remaining -= chunkLength;
-            if (remaining == 0)
+            if (remaining <= available)
             {
                 return true;
             }
 
-            currentAddress += (ulong)chunkLength;
-            currentIndex++;
+            remaining -= available;
+            currentAddress += available;
         }
+
+        return false;
     }
 
     private int FindContainingRegionIndex(ulong virtualAddress)
