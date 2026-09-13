@@ -34,3 +34,8 @@
 **Context:** Guest MMU Address Translation / `VirtualMemory.cs`
 **Learning:** The C# JIT compiler cannot elide array bounds checks for `Span<T>` or arrays when using a `while` loop with a manually managed index. This introduces silent branching overhead in memory-intensive hot paths (like `TryValidateRange`, `CopyFromRegions`).
 **Action:** Always replace `while` loops iterating over sequential buffers with standard `for (var i = start; i < span.Length; i++)` loops to guarantee RyuJIT bounds check elimination in high-frequency emulation paths.
+
+## 2026-09-13 - SysAbiExportGenerator.ExportModel Constructor Signature Updates
+**Context:** Unit Tests / `SysAbiExportGeneratorTests.cs`
+**Learning:** When internal models like `ExportModel` are modified with new parameters (e.g., adding `bool preferLle`), reflection-based unit tests creating instances via `Activator.CreateInstance` will fail with `MissingMethodException` if the test arguments are not updated to match the new constructor signature.
+**Action:** Always verify and update reflection-based test factories whenever internal constructor signatures change to maintain test suite stability.

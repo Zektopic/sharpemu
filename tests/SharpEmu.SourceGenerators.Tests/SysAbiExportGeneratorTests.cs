@@ -191,15 +191,15 @@ public sealed class SysAbiExportGeneratorTests
         var modelType = generatorType.GetNestedType("ExportModel", System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(modelType);
 
-        object Create(string containingType, string methodName, SysAbiExportShape.HandlerShape shape, string typedParameterKinds, string libraryName, string nid, string exportName, int target)
+        object Create(string containingType, string methodName, SysAbiExportShape.HandlerShape shape, string typedParameterKinds, string libraryName, string nid, string exportName, int target, bool preferLle)
         {
-            return Activator.CreateInstance(modelType, containingType, methodName, shape, typedParameterKinds, libraryName, nid, exportName, target)!;
+            return Activator.CreateInstance(modelType, containingType, methodName, shape, typedParameterKinds, libraryName, nid, exportName, target, preferLle)!;
         }
 
-        var baseModel = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1);
+        var baseModel = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1, false);
 
         // Equals(object? obj) and Equals(ExportModel? other) identical
-        var identical = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1);
+        var identical = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1, false);
         Assert.True(baseModel.Equals(identical));
         Assert.True(baseModel.Equals((object)identical));
 
@@ -214,28 +214,28 @@ public sealed class SysAbiExportGeneratorTests
         Assert.False(baseModel.Equals(new object()));
 
         // Different fields
-        var diffContainingType = Create("TypeB", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1);
+        var diffContainingType = Create("TypeB", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1, false);
         Assert.False(baseModel.Equals(diffContainingType));
 
-        var diffMethodName = Create("TypeA", "MethodB", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1);
+        var diffMethodName = Create("TypeA", "MethodB", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1, false);
         Assert.False(baseModel.Equals(diffMethodName));
 
-        var diffShape = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.Parameterless, "uint", "libA", "nidA", "expA", 1);
+        var diffShape = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.Parameterless, "uint", "libA", "nidA", "expA", 1, false);
         Assert.False(baseModel.Equals(diffShape));
 
-        var diffTypedKinds = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "int", "libA", "nidA", "expA", 1);
+        var diffTypedKinds = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "int", "libA", "nidA", "expA", 1, false);
         Assert.False(baseModel.Equals(diffTypedKinds));
 
-        var diffLibrary = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libB", "nidA", "expA", 1);
+        var diffLibrary = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libB", "nidA", "expA", 1, false);
         Assert.False(baseModel.Equals(diffLibrary));
 
-        var diffNid = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidB", "expA", 1);
+        var diffNid = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidB", "expA", 1, false);
         Assert.False(baseModel.Equals(diffNid));
 
-        var diffExportName = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expB", 1);
+        var diffExportName = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expB", 1, false);
         Assert.False(baseModel.Equals(diffExportName));
 
-        var diffTarget = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 2);
+        var diffTarget = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 2, false);
         Assert.False(baseModel.Equals(diffTarget));
     }
 }
