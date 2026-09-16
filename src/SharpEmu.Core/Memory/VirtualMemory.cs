@@ -127,6 +127,7 @@ public sealed class VirtualMemory : IVirtualMemory
         return true;
     }
 
+    /// <remarks>Performance optimization: Uses a standard for-loop bounded by span.Length over Span&lt;T&gt; traversal rather than manual index increments to enable the .NET JIT compiler to completely elide array bounds checks on each region access.</remarks>
     private bool TryValidateRange(
         ulong virtualAddress,
         int length,
@@ -142,14 +143,9 @@ public sealed class VirtualMemory : IVirtualMemory
         var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
         var currentAddress = virtualAddress;
         var remaining = length;
-        var currentIndex = regionIndex;
-        while (true)
-        {
-            if (currentIndex >= span.Length)
-            {
-                return false;
-            }
 
+        for (var currentIndex = regionIndex; currentIndex < span.Length; currentIndex++)
+        {
             ref var region = ref span[currentIndex];
             if (currentAddress < region.Region.VirtualAddress ||
                 currentAddress >= region.EndAddress ||
@@ -172,8 +168,9 @@ public sealed class VirtualMemory : IVirtualMemory
             }
 
             currentAddress += (ulong)chunkLength;
-            currentIndex++;
         }
+
+        return false;
     }
 
     private int FindContainingRegionIndex(ulong virtualAddress)
