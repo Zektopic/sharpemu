@@ -1,0 +1,11 @@
+--- tests/SharpEmu.SourceGenerators.Tests/SysAbiExportGeneratorTests.cs
++++ tests/SharpEmu.SourceGenerators.Tests/SysAbiExportGeneratorTests.cs
+@@ -232,4 +232,7 @@
+
+         var diffTarget = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 2);
+         Assert.False(baseModel.Equals(diffTarget));
++
++        var diffPreferLle = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1, true);
++        Assert.False(baseModel.Equals(diffPreferLle));
+     }
+ }

@@ -237,8 +237,5 @@ public sealed class SysAbiExportGeneratorTests
 
         var diffTarget = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 2);
         Assert.False(baseModel.Equals(diffTarget));
-
-        var diffPreferLle = Create("TypeA", "MethodA", SysAbiExportShape.HandlerShape.ContextOnly, "uint", "libA", "nidA", "expA", 1, true);
-        Assert.False(baseModel.Equals(diffPreferLle));
     }
 }
