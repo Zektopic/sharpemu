@@ -127,6 +127,7 @@ public sealed class VirtualMemory : IVirtualMemory
         return true;
     }
 
+    /// <remarks>Performance optimization: Uses a standard for-loop to allow the JIT compiler to elide array bounds checks during hot-path sequential span access.</remarks>
     private bool TryValidateRange(
         ulong virtualAddress,
         int length,
@@ -142,15 +143,9 @@ public sealed class VirtualMemory : IVirtualMemory
         var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
         var currentAddress = virtualAddress;
         var remaining = length;
-        var currentIndex = regionIndex;
-        while (true)
+        for (var i = regionIndex; i < span.Length; i++)
         {
-            if (currentIndex >= span.Length)
-            {
-                return false;
-            }
-
-            ref var region = ref span[currentIndex];
+            ref var region = ref span[i];
             if (currentAddress < region.Region.VirtualAddress ||
                 currentAddress >= region.EndAddress ||
                 (region.Region.Protection & requiredProtection) == 0)
@@ -172,8 +167,9 @@ public sealed class VirtualMemory : IVirtualMemory
             }
 
             currentAddress += (ulong)chunkLength;
-            currentIndex++;
         }
+
+        return false;
     }
 
     private int FindContainingRegionIndex(ulong virtualAddress)
@@ -192,14 +188,15 @@ public sealed class VirtualMemory : IVirtualMemory
             : -1;
     }
 
+    /// <remarks>Performance optimization: Uses a standard for-loop to allow the JIT compiler to elide array bounds checks during hot-path sequential span access.</remarks>
     private void CopyFromRegions(ulong virtualAddress, Span<byte> destination, int regionIndex)
     {
         var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
         var copied = 0;
         var currentAddress = virtualAddress;
-        while (copied < destination.Length)
+        for (var i = regionIndex; i < span.Length && copied < destination.Length; i++)
         {
-            ref var region = ref span[regionIndex++];
+            ref var region = ref span[i];
             var regionOffset = checked((int)(currentAddress - region.Region.VirtualAddress));
             var chunkLength = Math.Min(destination.Length - copied, region.BackingMemory.Length - regionOffset);
             region.BackingMemory.AsSpan(regionOffset, chunkLength).CopyTo(destination[copied..]);
@@ -208,14 +205,15 @@ public sealed class VirtualMemory : IVirtualMemory
         }
     }
 
+    /// <remarks>Performance optimization: Uses a standard for-loop to allow the JIT compiler to elide array bounds checks during hot-path sequential span access.</remarks>
     private void CopyToRegions(ulong virtualAddress, ReadOnlySpan<byte> source, int regionIndex)
     {
         var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
         var copied = 0;
         var currentAddress = virtualAddress;
-        while (copied < source.Length)
+        for (var i = regionIndex; i < span.Length && copied < source.Length; i++)
         {
-            ref var region = ref span[regionIndex++];
+            ref var region = ref span[i];
             var regionOffset = checked((int)(currentAddress - region.Region.VirtualAddress));
             var chunkLength = Math.Min(source.Length - copied, region.BackingMemory.Length - regionOffset);
             source.Slice(copied, chunkLength).CopyTo(region.BackingMemory.AsSpan(regionOffset, chunkLength));

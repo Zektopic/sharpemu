@@ -30,3 +30,12 @@
 **Context:** `src/SharpEmu.Core/Memory/VirtualMemory.cs` (`FindInsertionIndex`)
 **Learning:** Standard C# `List<T>` accesses inside high-frequency binary searches introduce unnecessary overhead via indexer property access and bounds checking. The same optimization pattern recently used in `PhysicalVirtualMemory.cs` (commit 980b47b) applies directly to `VirtualMemory.cs`. Bypassing this via `CollectionsMarshal.AsSpan(list)` completely elides these checks, turning the operation into direct O(1) span memory access.
 **Action:** When optimizing binary search loops or hot paths over `List<T>`, immediately refactor to use `CollectionsMarshal.AsSpan()` to access elements and `span.Length` for bounds, alongside the `>>> 1` operator for division.
+## 2026-09-13 - Bounds Check Elision in Guest MMU Read/Write Loops
+**Context:** Guest MMU Address Translation / `VirtualMemory.cs`
+**Learning:** The C# JIT compiler cannot elide array bounds checks for `Span<T>` or arrays when using a `while` loop with a manually managed index. This introduces silent branching overhead in memory-intensive hot paths (like `TryValidateRange`, `CopyFromRegions`).
+**Action:** Always replace `while` loops iterating over sequential buffers with standard `for (var i = start; i < span.Length; i++)` loops to guarantee RyuJIT bounds check elimination in high-frequency emulation paths.
+
+## 2026-09-13 - SysAbiExportGenerator.ExportModel Constructor Signature Updates
+**Context:** Unit Tests / `SysAbiExportGeneratorTests.cs`
+**Learning:** When internal models like `ExportModel` are modified with new parameters (e.g., adding `bool preferLle`), reflection-based unit tests creating instances via `Activator.CreateInstance` will fail with `MissingMethodException` if the test arguments are not updated to match the new constructor signature.
+**Action:** Always verify and update reflection-based test factories whenever internal constructor signatures change to maintain test suite stability.
