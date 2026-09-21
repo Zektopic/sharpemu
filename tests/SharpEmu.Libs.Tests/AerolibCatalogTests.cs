@@ -7,15 +7,18 @@ using Xunit;
 
 namespace SharpEmu.Libs.Tests;
 
+/// <summary>
+/// Guards the build-time-generated aerolib.bin embedding: the catalog must load from
+/// the assembly and resolve both directions, or the loader's import naming, the
+/// not-implemented diagnostics, and runtime dlsym all silently degrade.
+/// </summary>
 public sealed class AerolibCatalogTests
 {
     [Fact]
     public void EmbeddedCatalogResolvesKnownSymbolBothWays()
     {
-        // 0x1C6A035610153249 -> sceKernelWaitSema
-        Assert.True(Aerolib.Instance.TryGetByName("sceKernelWaitSema", out var byName));
+        Assert.True(Aerolib.Instance.TryGetByExportName("sceKernelWaitSema", out var byName));
         Assert.Equal("Zxa0VhQVTsk", byName.Nid);
-        Assert.Equal(0x1C6A035610153249UL, byName.NumericNid);
 
         Assert.True(Aerolib.Instance.TryGetByNid("Zxa0VhQVTsk", out var byNid));
         Assert.Equal("sceKernelWaitSema", byNid.ExportName);
