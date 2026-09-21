@@ -6,7 +6,6 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Linq;
 using SharpEmu.Core;
 using SharpEmu.Core.Cpu;
 using SharpEmu.Core.Memory;
