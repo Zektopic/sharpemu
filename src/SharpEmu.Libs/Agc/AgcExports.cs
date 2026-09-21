@@ -10,6 +10,7 @@ using SharpEmu.Libs.Kernel;
 using SharpEmu.Libs.VideoOut;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace SharpEmu.Libs.Agc;
 
@@ -10386,7 +10387,7 @@ private static long _indirectDrawProbeCount;
         }
 
         if (targets.Count > 1 &&
-            targets.Select(t => t.Address).Distinct().Count() != targets.Count)
+            HasDuplicateTargetAddress(CollectionsMarshal.AsSpan(targets)))
         {
             var dupCount = Interlocked.Increment(ref _duplicateTargetTraceCount);
             if (dupCount <= 12 || dupCount % 500 == 0)
@@ -10401,6 +10402,28 @@ private static long _indirectDrawProbeCount;
         }
 
         return targets;
+    }
+
+    /// <summary>
+    /// Checks for duplicate target addresses in O(N^2) time.
+    /// Since N is less than or equal to 8 (ColorTargetCount), this is significantly faster and allocation-free
+    /// compared to using LINQ's .Distinct().Count() != targets.Count, which allocates enumerators and a HashSet per draw.
+    /// </summary>
+    private static bool HasDuplicateTargetAddress(ReadOnlySpan<RenderTargetDescriptor> targets)
+    {
+        for (int i = 0; i < targets.Length - 1; i++)
+        {
+            var address = targets[i].Address;
+            for (int j = i + 1; j < targets.Length; j++)
+            {
+                if (targets[j].Address == address)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static GuestRenderState CreateRenderState(
