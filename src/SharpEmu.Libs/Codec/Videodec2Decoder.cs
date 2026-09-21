@@ -312,11 +312,11 @@ internal sealed unsafe class Videodec2Decoder : IDisposable
             var now = DateTime.UtcNow;
             if (nextDeadline > now)
             {
-                try
-                {
-                    Task.Delay(nextDeadline - now, token).GetAwaiter().GetResult();
-                }
-                catch (OperationCanceledException)
+                // <summary>
+                // Avoids Task and state machine allocations by blocking synchronously on this dedicated thread.
+                // </summary>
+                Thread.Sleep(nextDeadline - now);
+                if (token.IsCancellationRequested)
                 {
                     return;
                 }
