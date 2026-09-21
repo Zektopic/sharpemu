@@ -40,4 +40,12 @@ public sealed class AerolibCatalogTests
         var ex = Record.Exception(() => Aerolib.Instance.TryGetByNid(nid!, out _));
         Assert.IsAssignableFrom<ArgumentException>(ex);
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public void ContainsNid_NullOrEmptyString_ReturnsFalse(string? nid)
+    {
+        Assert.False(Aerolib.Instance.ContainsNid(nid!));
+    }
 }
