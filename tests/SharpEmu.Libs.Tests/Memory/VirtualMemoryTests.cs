@@ -154,4 +154,13 @@ public sealed class VirtualMemoryTests
         Assert.False(memory.TryRead(pageSize, new byte[(int)pageSize * 2]));
         Assert.False(memory.TryWrite(pageSize, new byte[(int)pageSize * 2]));
     }
+
+    [Fact]
+    public void MapZeroSizeThrowsArgumentOutOfRangeException()
+    {
+        var memory = new VirtualMemory();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            memory.Map(0x1000, 0, 0, [], ProgramHeaderFlags.Read | ProgramHeaderFlags.Write));
+    }
 }
