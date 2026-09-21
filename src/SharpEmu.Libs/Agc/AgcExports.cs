@@ -10385,8 +10385,7 @@ private static long _indirectDrawProbeCount;
                 (attrib3 >> 14) & 0x1Fu));
         }
 
-        if (targets.Count > 1 &&
-            targets.Select(t => t.Address).Distinct().Count() != targets.Count)
+        if (targets.Count > 1 && HasDuplicateTargetAddresses(targets))
         {
             var dupCount = Interlocked.Increment(ref _duplicateTargetTraceCount);
             if (dupCount <= 12 || dupCount % 500 == 0)
@@ -10401,6 +10400,27 @@ private static long _indirectDrawProbeCount;
         }
 
         return targets;
+    }
+
+    /// <summary>
+    /// Checks if the target list contains any duplicate addresses.
+    /// Avoids LINQ Distinct() enumerator and hashset allocations on the hot path.
+    /// </summary>
+    private static bool HasDuplicateTargetAddresses(List<RenderTargetDescriptor> targets)
+    {
+        var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(targets);
+        for (int i = 0; i < span.Length; i++)
+        {
+            for (int j = i + 1; j < span.Length; j++)
+            {
+                if (span[i].Address == span[j].Address)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     private static GuestRenderState CreateRenderState(
