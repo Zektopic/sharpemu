@@ -461,7 +461,9 @@ internal static class KernelSocketCompatExports
     {
         if (HostConnectionFactoryForTesting != null)
         {
-            (client, stream) = HostConnectionFactoryForTesting(ipAddress, port)!;
+            var testResult = HostConnectionFactoryForTesting(ipAddress, port);
+            client = testResult.Client!;
+            stream = testResult.Stream!;
             return client != null && stream != null;
         }
 

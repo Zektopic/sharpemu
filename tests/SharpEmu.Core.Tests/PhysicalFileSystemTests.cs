@@ -39,9 +39,9 @@ public sealed class PhysicalFileSystemTests : IDisposable
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]
-    public void Exists_WhenPathIsNullOrWhiteSpace_ReturnsFalse(string path)
+    public void Exists_WhenPathIsNullOrWhiteSpace_ReturnsFalse(string? path)
     {
-        var result = _fileSystem.Exists(path);
+        var result = _fileSystem.Exists(path!);
 
         Assert.False(result);
     }
@@ -68,9 +68,9 @@ public sealed class PhysicalFileSystemTests : IDisposable
     [InlineData(null)]
     [InlineData("")]
     [InlineData(" ")]
-    public void TryReadAllBytes_WhenPathIsNullOrWhiteSpace_ReturnsFalseAndEmptyArray(string path)
+    public void TryReadAllBytes_WhenPathIsNullOrWhiteSpace_ReturnsFalseAndEmptyArray(string? path)
     {
-        var result = _fileSystem.TryReadAllBytes(path, out var data);
+        var result = _fileSystem.TryReadAllBytes(path!, out var data);
 
         Assert.False(result);
         Assert.Empty(data);
