@@ -102,6 +102,18 @@ public sealed class VirtualMemoryTests
         Assert.False(empty.TryWrite(0x1000, value));
     }
 
+    [Fact]
+    public void MapThrowsWhenFileDataExceedsMemorySize()
+    {
+        var memory = new VirtualMemory();
+        var fileData = new byte[0x20];
+
+        var ex = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            memory.Map(0x1000, 0x10, 0, fileData, ProgramHeaderFlags.Read));
+
+        Assert.Equal("fileData", ex.ParamName);
+    }
+
     // Zero-length operations succeed on a mapped address and touch nothing, but
     // still require a mapped address.
     [Fact]
