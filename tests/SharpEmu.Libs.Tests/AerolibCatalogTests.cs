@@ -1,6 +1,7 @@
 // Copyright (C) 2026 SharpEmu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+using System;
 using SharpEmu.HLE;
 using Xunit;
 
@@ -47,5 +48,11 @@ public sealed class AerolibCatalogTests
     public void ContainsNid_NullOrEmptyString_ReturnsFalse(string? nid)
     {
         Assert.False(Aerolib.Instance.ContainsNid(nid!));
+    }
+
+    [Fact]
+    public void TryGetByExportName_EmptyString_ThrowsArgumentException()
+    {
+        Assert.ThrowsAny<ArgumentException>(() => Aerolib.Instance.TryGetByExportName("", out _));
     }
 }
