@@ -2117,7 +2117,7 @@ public static partial class AgcExports
     // every unpopulated slot is a harmless failed probe instead of
     // guest-stack garbage.
     [SysAbiExport(
-        Nid = "dbOlWdppb4o",
+        Nid = "+qMhV0D+Sa0",
         ExportName = "sceAgcAddPrimStateRegisters",
         Target = Generation.Gen5,
         LibraryName = "libSceAgc")]
