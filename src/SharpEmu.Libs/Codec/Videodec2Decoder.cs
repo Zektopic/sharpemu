@@ -214,7 +214,8 @@ internal sealed unsafe class Videodec2Decoder : IDisposable
             byte[]? item;
             try
             {
-                if (!reader.WaitToReadAsync(token).AsTask().GetAwaiter().GetResult())
+                var waitTask = reader.WaitToReadAsync(token);
+                if (!(waitTask.IsCompletedSuccessfully ? waitTask.Result : waitTask.AsTask().GetAwaiter().GetResult()))
                 {
                     return;
                 }
@@ -245,7 +246,11 @@ internal sealed unsafe class Videodec2Decoder : IDisposable
             try
             {
                 // Blocks if the scheduler hasn't kept up; deliberate backpressure.
-                _frameQueue.Writer.WriteAsync((bgraFrame, width, height), token).AsTask().GetAwaiter().GetResult();
+                var writeTask = _frameQueue.Writer.WriteAsync((bgraFrame, width, height), token);
+                if (!writeTask.IsCompletedSuccessfully)
+                {
+                    writeTask.AsTask().GetAwaiter().GetResult();
+                }
             }
             catch (OperationCanceledException)
             {
@@ -278,7 +283,8 @@ internal sealed unsafe class Videodec2Decoder : IDisposable
             (byte[] Bgra, uint Width, uint Height) item;
             try
             {
-                if (!reader.WaitToReadAsync(token).AsTask().GetAwaiter().GetResult())
+                var waitTask = reader.WaitToReadAsync(token);
+                if (!(waitTask.IsCompletedSuccessfully ? waitTask.Result : waitTask.AsTask().GetAwaiter().GetResult()))
                 {
                     return;
                 }
