@@ -22,4 +22,15 @@ public sealed class AerolibCatalogTests
         Assert.True(Aerolib.Instance.TryGetByNid("Zxa0VhQVTsk", out var byNid));
         Assert.Equal("sceKernelWaitSema", byNid.ExportName);
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    public void TryGetName_NullOrEmptyNid_ReturnsFalseAndEmptyName(string? nid)
+    {
+        var result = Aerolib.Instance.TryGetName(nid!, out var name);
+
+        Assert.False(result);
+        Assert.Equal(string.Empty, name);
+    }
 }
