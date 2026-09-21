@@ -4,7 +4,6 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 using SharpEmu.HLE;
@@ -317,10 +316,20 @@ public static class JsonExports
         ctx[CpuRegister.Rax] = element.ValueKind switch
         {
             System.Text.Json.JsonValueKind.Array => (ulong)element.GetArrayLength(),
-            System.Text.Json.JsonValueKind.Object => (ulong)element.EnumerateObject().Count(),
+            System.Text.Json.JsonValueKind.Object => GetPropertyCount(element),
             _ => 0,
         };
         return 0;
+    }
+
+    private static ulong GetPropertyCount(JsonElement element)
+    {
+        ulong count = 0;
+        foreach (var _ in element.EnumerateObject())
+        {
+            count++;
+        }
+        return count;
     }
 
     [SysAbiExport(
