@@ -2048,21 +2048,24 @@ public partial class MainWindow : Window
         {
             if (OperatingSystem.IsWindows())
             {
-                Process.Start(new ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = "explorer.exe",
-                    Arguments = $"/select,\"{game.Path}\"",
                     UseShellExecute = false,
-                });
+                };
+                psi.ArgumentList.Add("/select,");
+                psi.ArgumentList.Add(game.Path);
+                Process.Start(psi);
             }
             else if (Path.GetDirectoryName(game.Path) is { } directory)
             {
-                Process.Start(new ProcessStartInfo
+                var psi = new ProcessStartInfo
                 {
                     FileName = OperatingSystem.IsMacOS() ? "open" : "xdg-open",
-                    Arguments = $"\"{directory}\"",
                     UseShellExecute = false,
-                });
+                };
+                psi.ArgumentList.Add(directory);
+                Process.Start(psi);
             }
         }
         catch (Exception ex)
