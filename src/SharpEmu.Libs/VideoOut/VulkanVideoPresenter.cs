@@ -6307,6 +6307,7 @@ internal static unsafe class VulkanVideoPresenter
             }
         }
 
+        [SkipLocalsInit]
         private void CollectAbandonedGuestImageVersions()
         {
             if (_guestImageVersions.Count == 0)
@@ -6314,33 +6315,81 @@ internal static unsafe class VulkanVideoPresenter
                 return;
             }
 
-            HashSet<long> referencedVersions;
+            int referencedCount = 0;
+            // MaxPendingGuestFlipVersions is 4, plus 1 for _latestPresentation.
+            Span<long> referencedVersions = stackalloc long[8];
+
             lock (_gate)
             {
-                referencedVersions = _pendingGuestImagePresentations
-                    .Select(static presentation => presentation.GuestImageVersion)
-                    .Where(static version => version != 0)
-                    .ToHashSet();
+                foreach (var presentation in _pendingGuestImagePresentations)
+                {
+                    if (presentation.GuestImageVersion != 0)
+                    {
+                        referencedVersions[referencedCount++] = presentation.GuestImageVersion;
+                    }
+                }
+
                 if (_latestPresentation is { GuestImageVersion: not 0 } latest)
                 {
-                    referencedVersions.Add(latest.GuestImageVersion);
+                    bool found = false;
+                    for (int i = 0; i < referencedCount; i++)
+                    {
+                        if (referencedVersions[i] == latest.GuestImageVersion)
+                        {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found)
+                    {
+                        referencedVersions[referencedCount++] = latest.GuestImageVersion;
+                    }
                 }
             }
 
-            foreach (var entry in _guestImageVersions.ToArray())
+            var abandonedCount = 0;
+            var maxAbandoned = _guestImageVersions.Count;
+            long[]? pooledArray = null;
+            Span<long> abandonedVersions = maxAbandoned <= 64
+                ? stackalloc long[64]
+                : (pooledArray = System.Buffers.ArrayPool<long>.Shared.Rent(maxAbandoned));
+
+            foreach (var entry in _guestImageVersions)
             {
-                if (referencedVersions.Contains(entry.Key))
+                var key = entry.Key;
+                bool isReferenced = false;
+                for (int i = 0; i < referencedCount; i++)
                 {
-                    continue;
+                    if (referencedVersions[i] == key)
+                    {
+                        isReferenced = true;
+                        break;
+                    }
                 }
 
-                _guestImageVersions.Remove(entry.Key);
-                _capturedGuestFlipVersions.Remove(entry.Key);
-                _deferredGuestImageVersionDestroys.Enqueue(
-                    (entry.Value, _submitTimeline));
-                TraceVulkanShader(
-                    $"vk.flip_retire_deferred version={entry.Key} " +
-                    $"timeline={_submitTimeline} reason=presentation-dropped");
+                if (!isReferenced)
+                {
+                    abandonedVersions[abandonedCount++] = key;
+                }
+            }
+
+            for (int i = 0; i < abandonedCount; i++)
+            {
+                var key = abandonedVersions[i];
+                if (_guestImageVersions.Remove(key, out var value))
+                {
+                    _capturedGuestFlipVersions.Remove(key);
+                    _deferredGuestImageVersionDestroys.Enqueue(
+                        (value, _submitTimeline));
+                    TraceVulkanShader(
+                        $"vk.flip_retire_deferred version={key} " +
+                        $"timeline={_submitTimeline} reason=presentation-dropped");
+                }
+            }
+
+            if (pooledArray != null)
+            {
+                System.Buffers.ArrayPool<long>.Shared.Return(pooledArray);
             }
         }
 
