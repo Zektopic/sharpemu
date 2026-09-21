@@ -1,6 +1,7 @@
 // Copyright (C) 2026 SharpEmu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+using System;
 using SharpEmu.HLE;
 using Xunit;
 
@@ -21,5 +22,11 @@ public sealed class AerolibCatalogTests
 
         Assert.True(Aerolib.Instance.TryGetByNid("Zxa0VhQVTsk", out var byNid));
         Assert.Equal("sceKernelWaitSema", byNid.ExportName);
+    }
+
+    [Fact]
+    public void TryGetByExportName_EmptyString_ThrowsArgumentException()
+    {
+        Assert.ThrowsAny<ArgumentException>(() => Aerolib.Instance.TryGetByExportName("", out _));
     }
 }
