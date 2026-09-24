@@ -39,3 +39,7 @@
 **Context:** Unit Tests / `SysAbiExportGeneratorTests.cs`
 **Learning:** When internal models like `ExportModel` are modified with new parameters (e.g., adding `bool preferLle`), reflection-based unit tests creating instances via `Activator.CreateInstance` will fail with `MissingMethodException` if the test arguments are not updated to match the new constructor signature.
 **Action:** Always verify and update reflection-based test factories whenever internal constructor signatures change to maintain test suite stability.
+## 2026-09-24 - Span Slicing & Bound Check Elision in Guest Memory Hot Paths
+**Context:** Guest MMU / `VirtualMemory.cs`
+**Learning:** Sequential memory chunking operations over spans can be significantly optimized by re-slicing the target spans (`destination = destination.Slice(...)`) instead of manually tracking offset counters and lengths. This enables tighter MSIL generation, reduces stack pressure, and removes redundant arithmetic in tight memory loops. Combined with standard for-loops, this allows the .NET JIT to reliably elide bounds checks.
+**Action:** Use idiomatic `Span.Slice` reassignment instead of indexer tracking for sequential chunked memory operations in C# hot paths.
