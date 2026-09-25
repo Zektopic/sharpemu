@@ -39,3 +39,8 @@
 **Context:** Unit Tests / `SysAbiExportGeneratorTests.cs`
 **Learning:** When internal models like `ExportModel` are modified with new parameters (e.g., adding `bool preferLle`), reflection-based unit tests creating instances via `Activator.CreateInstance` will fail with `MissingMethodException` if the test arguments are not updated to match the new constructor signature.
 **Action:** Always verify and update reflection-based test factories whenever internal constructor signatures change to maintain test suite stability.
+
+## 2026-09-26 - Span Slicing Reassignment in Hot Loops
+**Context:** Guest MMU / `VirtualMemory.cs` (`CopyFromRegions`, `CopyToRegions`)
+**Learning:** Sequential tracking over Spans with an external `copied` counter and range indexer (`span[copied..]`) introduces local bounds check validation overhead. Reassigning the span reference in place via `span = span.Slice(chunkLength)` eliminates this and simplifies hot loops into `!span.IsEmpty` checks.
+**Action:** Use idiomatic slice-reassignment (`span = span.Slice(length)`) instead of external integer trackers in loop conditions over `Span<T>` sequential memory operations to reduce arithmetic overhead.

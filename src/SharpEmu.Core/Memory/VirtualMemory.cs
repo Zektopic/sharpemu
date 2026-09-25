@@ -192,15 +192,14 @@ public sealed class VirtualMemory : IVirtualMemory
     private void CopyFromRegions(ulong virtualAddress, Span<byte> destination, int regionIndex)
     {
         var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
-        var copied = 0;
         var currentAddress = virtualAddress;
-        for (var i = regionIndex; i < span.Length && copied < destination.Length; i++)
+        for (var i = regionIndex; i < span.Length && !destination.IsEmpty; i++)
         {
             ref var region = ref span[i];
             var regionOffset = checked((int)(currentAddress - region.Region.VirtualAddress));
-            var chunkLength = Math.Min(destination.Length - copied, region.BackingMemory.Length - regionOffset);
-            region.BackingMemory.AsSpan(regionOffset, chunkLength).CopyTo(destination[copied..]);
-            copied += chunkLength;
+            var chunkLength = Math.Min(destination.Length, region.BackingMemory.Length - regionOffset);
+            region.BackingMemory.AsSpan(regionOffset, chunkLength).CopyTo(destination);
+            destination = destination.Slice(chunkLength);
             currentAddress += (ulong)chunkLength;
         }
     }
@@ -209,15 +208,14 @@ public sealed class VirtualMemory : IVirtualMemory
     private void CopyToRegions(ulong virtualAddress, ReadOnlySpan<byte> source, int regionIndex)
     {
         var span = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_regions);
-        var copied = 0;
         var currentAddress = virtualAddress;
-        for (var i = regionIndex; i < span.Length && copied < source.Length; i++)
+        for (var i = regionIndex; i < span.Length && !source.IsEmpty; i++)
         {
             ref var region = ref span[i];
             var regionOffset = checked((int)(currentAddress - region.Region.VirtualAddress));
-            var chunkLength = Math.Min(source.Length - copied, region.BackingMemory.Length - regionOffset);
-            source.Slice(copied, chunkLength).CopyTo(region.BackingMemory.AsSpan(regionOffset, chunkLength));
-            copied += chunkLength;
+            var chunkLength = Math.Min(source.Length, region.BackingMemory.Length - regionOffset);
+            source.Slice(0, chunkLength).CopyTo(region.BackingMemory.AsSpan(regionOffset, chunkLength));
+            source = source.Slice(chunkLength);
             currentAddress += (ulong)chunkLength;
         }
     }
