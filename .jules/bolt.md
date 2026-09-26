@@ -43,3 +43,8 @@
 **Context:** Guest MMU / `VirtualMemory.cs`
 **Learning:** Sequential memory chunking operations over spans can be significantly optimized by re-slicing the target spans (`destination = destination.Slice(...)`) instead of manually tracking offset counters and lengths. This enables tighter MSIL generation, reduces stack pressure, and removes redundant arithmetic in tight memory loops. Combined with standard for-loops, this allows the .NET JIT to reliably elide bounds checks.
 **Action:** Use idiomatic `Span.Slice` reassignment instead of indexer tracking for sequential chunked memory operations in C# hot paths.
+
+## 2026-09-26 - Span Slicing Reassignment in Hot Loops
+**Context:** Guest MMU / `VirtualMemory.cs` (`CopyFromRegions`, `CopyToRegions`)
+**Learning:** Sequential tracking over Spans with an external `copied` counter and range indexer (`span[copied..]`) introduces local bounds check validation overhead. Reassigning the span reference in place via `span = span.Slice(chunkLength)` eliminates this and simplifies hot loops into `!span.IsEmpty` checks.
+**Action:** Use idiomatic slice-reassignment (`span = span.Slice(length)`) instead of external integer trackers in loop conditions over `Span<T>` sequential memory operations to reduce arithmetic overhead.
