@@ -48,3 +48,8 @@
 **Context:** Guest MMU / `VirtualMemory.cs` (`CopyFromRegions`, `CopyToRegions`)
 **Learning:** Sequential tracking over Spans with an external `copied` counter and range indexer (`span[copied..]`) introduces local bounds check validation overhead. Reassigning the span reference in place via `span = span.Slice(chunkLength)` eliminates this and simplifies hot loops into `!span.IsEmpty` checks.
 **Action:** Use idiomatic slice-reassignment (`span = span.Slice(length)`) instead of external integer trackers in loop conditions over `Span<T>` sequential memory operations to reduce arithmetic overhead.
+
+## 2023-10-25 - Kernel Memory Subsystem Allocation Elimination
+**Context:** `KernelMemoryCompatExports.cs`
+**Learning:** LINQ `Where(...).ToArray()` and `Where(...).OrderBy(...).FirstOrDefault()` chains inside the `_memoryGate` lock caused severe GC pressure during guest memory unmapping and querying. Because the critical section naturally isolates concurrent access, we can safely share a single static `List<T>` to collect unmapped regions, eliminating closures, enumerators, and per-call array allocations.
+**Action:** When filtering collections inside an existing critical section (`lock`), aggressively replace LINQ with manual `foreach` loops and cache results in static thread-safe buffers protected by the same lock.

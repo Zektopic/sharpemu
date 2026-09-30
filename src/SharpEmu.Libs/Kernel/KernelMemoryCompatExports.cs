@@ -108,6 +108,9 @@ public static partial class KernelMemoryCompatExports
     private static readonly object _guestMountGate = new();
     private static readonly Dictionary<ulong, DirectAllocation> _directAllocations = new();
     private static readonly Dictionary<ulong, LibcHeapAllocation> _libcAllocations = new();
+
+    /// <remarks>Performance optimization: Reuses a static list under <see cref="_memoryGate"/> to eliminate LINQ Where().ToArray() allocations on guest munmap.</remarks>
+    private static readonly List<MappedRegion> _regionsToRemove = new();
     // Keyed by (and kept sorted on) region base address so VirtualQuery can find a
     // containing/next region with a binary search instead of an O(n) scan. Every
     // write uses the region's own Address as the key (see AddMappedRegionSliceLocked
@@ -3453,19 +3456,23 @@ public static partial class KernelMemoryCompatExports
         var removedAny = false;
         lock (_memoryGate)
         {
-            var removedRegions = _mappedRegions.Values
-                .Where(region =>
-                    region.Address >= address &&
+            _regionsToRemove.Clear();
+            foreach (var region in _mappedRegions.Values)
+            {
+                if (region.Address >= address &&
                     region.Address < rangeEnd &&
                     region.Length <= rangeEnd - region.Address)
-                .ToArray();
+                {
+                    _regionsToRemove.Add(region);
+                }
+            }
 
-            if (removedRegions.Length == 0 && !physicallyBacked)
+            if (_regionsToRemove.Count == 0 && !physicallyBacked)
             {
                 return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
             }
 
-            foreach (var mappedRegion in removedRegions)
+            foreach (var mappedRegion in _regionsToRemove)
             {
                 removedAny |= _mappedRegions.Remove(mappedRegion.Address);
                 if (mappedRegion.IsFlexible)
@@ -3475,6 +3482,8 @@ public static partial class KernelMemoryCompatExports
                         : _allocatedFlexibleBytes - mappedRegion.Length;
                 }
             }
+
+            _regionsToRemove.Clear();
         }
 
         if (physicallyBacked || removedAny)
@@ -3704,21 +3713,26 @@ public static partial class KernelMemoryCompatExports
         var matchEnd = 0UL;
         var matchMemoryType = 0;
 
+        // Performance optimization: Using an allocation-free loop over direct allocations
+        // to find the matching block instead of LINQ Where().OrderBy().FirstOrDefault()
         lock (_memoryGate)
         {
-            var candidates = _directAllocations.Values
-                .Where(block => findNext
-                    ? block.Start + block.Length > offset
-                    : offset >= block.Start && offset < block.Start + block.Length)
-                .OrderBy(block => block.Start);
-
-            foreach (var block in candidates)
+            foreach (var block in _directAllocations.Values)
             {
-                found = true;
-                matchStart = block.Start;
-                matchEnd = block.Start + block.Length;
-                matchMemoryType = block.MemoryType;
-                break;
+                var matches = findNext
+                    ? block.Start + block.Length > offset
+                    : offset >= block.Start && offset < block.Start + block.Length;
+
+                if (matches)
+                {
+                    if (!found || block.Start < matchStart)
+                    {
+                        found = true;
+                        matchStart = block.Start;
+                        matchEnd = block.Start + block.Length;
+                        matchMemoryType = block.MemoryType;
+                    }
+                }
             }
         }
 
