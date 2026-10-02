@@ -123,6 +123,10 @@ public static partial class KernelMemoryCompatExports
     // "/app0/Data.bin" even though that file exists.
     private static readonly HashSet<string> _negativeStatCache = new(HostFsPath.Comparer);
     private static readonly ConcurrentDictionary<string, ulong> _aprFileSizeCache = new(HostFsPath.Comparer);
+
+    // Reusable buffer for munmap to avoid allocating arrays inside the MMU lock hot-path.
+    // Thread safety is guaranteed by _memoryGate.
+    private static readonly List<MappedRegion> _removedRegionsBuffer = new();
     private static long _nextFileDescriptor = 2;
     private static string _applicationTitleId = "UNKNOWN";
 
@@ -3453,19 +3457,23 @@ public static partial class KernelMemoryCompatExports
         var removedAny = false;
         lock (_memoryGate)
         {
-            var removedRegions = _mappedRegions.Values
-                .Where(region =>
-                    region.Address >= address &&
+            _removedRegionsBuffer.Clear();
+            foreach (var region in _mappedRegions.Values)
+            {
+                if (region.Address >= address &&
                     region.Address < rangeEnd &&
                     region.Length <= rangeEnd - region.Address)
-                .ToArray();
+                {
+                    _removedRegionsBuffer.Add(region);
+                }
+            }
 
-            if (removedRegions.Length == 0 && !physicallyBacked)
+            if (_removedRegionsBuffer.Count == 0 && !physicallyBacked)
             {
                 return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
             }
 
-            foreach (var mappedRegion in removedRegions)
+            foreach (var mappedRegion in _removedRegionsBuffer)
             {
                 removedAny |= _mappedRegions.Remove(mappedRegion.Address);
                 if (mappedRegion.IsFlexible)
@@ -3475,6 +3483,7 @@ public static partial class KernelMemoryCompatExports
                         : _allocatedFlexibleBytes - mappedRegion.Length;
                 }
             }
+            _removedRegionsBuffer.Clear();
         }
 
         if (physicallyBacked || removedAny)

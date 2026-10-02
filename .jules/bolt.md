@@ -48,3 +48,11 @@
 **Context:** Guest MMU / `VirtualMemory.cs` (`CopyFromRegions`, `CopyToRegions`)
 **Learning:** Sequential tracking over Spans with an external `copied` counter and range indexer (`span[copied..]`) introduces local bounds check validation overhead. Reassigning the span reference in place via `span = span.Slice(chunkLength)` eliminates this and simplifies hot loops into `!span.IsEmpty` checks.
 **Action:** Use idiomatic slice-reassignment (`span = span.Slice(length)`) instead of external integer trackers in loop conditions over `Span<T>` sequential memory operations to reduce arithmetic overhead.
+## 2026-10-02 - Zero-Allocation MMU Unmap Tracking
+**Context:**  inside
+**Learning:** Iterating over  and filtering with LINQ () inside heavily-contended emulator kernel locks allocates closures, iterators, and arrays per call, creating substantial GC pressure on the host. Using a pre-allocated static/thread-local list combined with  over  (which uses an allocation-free struct enumerator) safely accumulates candidates for removal with zero allocations.
+**Action:** Enforce allocation-free accumulator patterns (like static  buffers + ) for multi-element removal in hot path collections.
+## 2024-11-20 - Zero-Allocation MMU Unmap Tracking
+**Context:** src/SharpEmu.Libs/Kernel/KernelMemoryCompatExports.cs inside KernelMunmap
+**Learning:** Iterating over SortedList Values and filtering with LINQ Where.ToArray() inside heavily-contended emulator kernel locks allocates closures, iterators, and arrays per call, creating substantial GC pressure on the host. Using a pre-allocated static/thread-local list combined with foreach over Values (which uses an allocation-free struct enumerator) safely accumulates candidates for removal with zero allocations.
+**Action:** Enforce allocation-free accumulator patterns (like static List buffers + Clear()) for multi-element removal in hot path collections.
