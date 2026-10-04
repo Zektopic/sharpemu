@@ -48,3 +48,7 @@
 **Context:** Guest MMU / `VirtualMemory.cs` (`CopyFromRegions`, `CopyToRegions`)
 **Learning:** Sequential tracking over Spans with an external `copied` counter and range indexer (`span[copied..]`) introduces local bounds check validation overhead. Reassigning the span reference in place via `span = span.Slice(chunkLength)` eliminates this and simplifies hot loops into `!span.IsEmpty` checks.
 **Action:** Use idiomatic slice-reassignment (`span = span.Slice(length)`) instead of external integer trackers in loop conditions over `Span<T>` sequential memory operations to reduce arithmetic overhead.
+## 2026-10-04 - Eliminate LINQ allocations in KernelMemoryCompatExports
+**Context:** src/SharpEmu.Libs/Kernel/KernelMemoryCompatExports.cs
+**Learning:** Guest memory unmap/query operations can suffer from severe GC pressure caused by `.Where().ToArray()` and `.Where().OrderBy().FirstOrDefault()` LINQ chains executed repeatedly on `Dictionary.Values`.
+**Action:** Replaced `.Where().ToArray()` with a pre-allocated static `List<MappedRegion>` buffer (`_munmapBuffer.Clear()`) combined with an allocation-free `for` loop. Replaced `.Where().OrderBy().FirstOrDefault()` with a single-pass O(N) allocation-free search loop tracking the `bestStart` element.

@@ -113,6 +113,7 @@ public static partial class KernelMemoryCompatExports
     // write uses the region's own Address as the key (see AddMappedRegionSliceLocked
     // and the mmap sites), so Values enumerate in ascending address order.
     private static readonly SortedList<ulong, MappedRegion> _mappedRegions = new();
+    private static readonly List<MappedRegion> _munmapBuffer = new();
     private static readonly Dictionary<ulong, string> _mappedRegionNames = new();
     private static readonly Dictionary<string, string> _guestMounts = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> _tracedStatResults = new(StringComparer.Ordinal);
@@ -3453,19 +3454,27 @@ public static partial class KernelMemoryCompatExports
         var removedAny = false;
         lock (_memoryGate)
         {
-            var removedRegions = _mappedRegions.Values
-                .Where(region =>
-                    region.Address >= address &&
+            // Performance optimization: Replaces LINQ .Where(...).ToArray() array allocations with a pre-allocated static List to eliminate per-invocation heap and enumerator allocations in the guest memory unmap hot path.
+            _munmapBuffer.Clear();
+            var vals = _mappedRegions.Values;
+            var count = vals.Count;
+            for (var i = 0; i < count; i++)
+            {
+                var region = vals[i];
+                if (region.Address >= address &&
                     region.Address < rangeEnd &&
                     region.Length <= rangeEnd - region.Address)
-                .ToArray();
+                {
+                    _munmapBuffer.Add(region);
+                }
+            }
 
-            if (removedRegions.Length == 0 && !physicallyBacked)
+            if (_munmapBuffer.Count == 0 && !physicallyBacked)
             {
                 return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
             }
 
-            foreach (var mappedRegion in removedRegions)
+            foreach (var mappedRegion in _munmapBuffer)
             {
                 removedAny |= _mappedRegions.Remove(mappedRegion.Address);
                 if (mappedRegion.IsFlexible)
@@ -3706,19 +3715,30 @@ public static partial class KernelMemoryCompatExports
 
         lock (_memoryGate)
         {
-            var candidates = _directAllocations.Values
-                .Where(block => findNext
-                    ? block.Start + block.Length > offset
-                    : offset >= block.Start && offset < block.Start + block.Length)
-                .OrderBy(block => block.Start);
+            // Performance optimization: Replaces LINQ .Where(...).OrderBy(...) allocations with an allocation-free manual enumeration loop over dictionary values in the hot path.
+            DirectAllocation? bestBlock = null;
+            var bestStart = ulong.MaxValue;
 
-            foreach (var block in candidates)
+            foreach (var block in _directAllocations.Values)
+            {
+                var isMatch = findNext
+                    ? block.Start + block.Length > offset
+                    : offset >= block.Start && offset < block.Start + block.Length;
+
+                if (isMatch && block.Start < bestStart)
+                {
+                    bestStart = block.Start;
+                    bestBlock = block;
+                }
+            }
+
+            if (bestBlock.HasValue)
             {
                 found = true;
-                matchStart = block.Start;
-                matchEnd = block.Start + block.Length;
-                matchMemoryType = block.MemoryType;
-                break;
+                var value = bestBlock.Value;
+                matchStart = value.Start;
+                matchEnd = value.Start + value.Length;
+                matchMemoryType = value.MemoryType;
             }
         }
 
