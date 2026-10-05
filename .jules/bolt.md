@@ -48,3 +48,7 @@
 **Context:** Guest MMU / `VirtualMemory.cs` (`CopyFromRegions`, `CopyToRegions`)
 **Learning:** Sequential tracking over Spans with an external `copied` counter and range indexer (`span[copied..]`) introduces local bounds check validation overhead. Reassigning the span reference in place via `span = span.Slice(chunkLength)` eliminates this and simplifies hot loops into `!span.IsEmpty` checks.
 **Action:** Use idiomatic slice-reassignment (`span = span.Slice(length)`) instead of external integer trackers in loop conditions over `Span<T>` sequential memory operations to reduce arithmetic overhead.
+## 2026-09-26 - Zero-Allocation Filter in Locked Unmap Region
+**Context:** `KernelMemoryCompatExports.cs` (Guest MMU Subsystem)
+**Learning:** Found a heavy LINQ `.Where(...).ToArray()` inside `sceKernelMunmap`, which holds a lock on `_memoryGate`. Replaced the LINQ sequence with a cached `static List<MappedRegion>`. Discovered that a simple `static` field combined with `Clear()` is perfectly thread-safe without `[ThreadStatic]` because of the existing `lock`. Further, iterating over `SortedList.Values` with `foreach` incurs zero allocations (due to a struct enumerator), so replacing it with a `for` loop is both unnecessary and error-prone.
+**Action:** When optimizing locked paths, prefer standard `static` variables (cleared appropriately) over `[ThreadStatic]`. Always use `foreach` for BCL dictionary/list enumerators instead of trying to hack around them, to maintain zero allocations safely.

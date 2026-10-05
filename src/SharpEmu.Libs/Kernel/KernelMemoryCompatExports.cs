@@ -162,6 +162,8 @@ public static partial class KernelMemoryCompatExports
         OperatingSystem.IsWindows() ? 0x1_0000_0000UL : 0x20_0000_0000UL;
     private static ulong _mainDirectMemoryPoolBase = UnsetMainDirectMemoryPoolBase;
     private static ulong _allocatedFlexibleBytes;
+
+    private static List<MappedRegion>? _unmapRemovalList;
     private static ulong _threadAtexitCountCallback;
     private static ulong _threadAtexitReportCallback;
     private static ulong _threadDtorsCallback;
@@ -3434,6 +3436,7 @@ public static partial class KernelMemoryCompatExports
         return (int)OrbisGen2Result.ORBIS_GEN2_OK;
     }
 
+    /// <remarks>Performance optimization: Replaced `.Where(...).ToArray()` on _mappedRegions with a static List to eliminate array and enumerator allocations inside a high-frequency locked memory unmap path.</remarks>
     [SysAbiExport(
         Nid = "cQke9UuBQOk",
         ExportName = "sceKernelMunmap",
@@ -3453,19 +3456,25 @@ public static partial class KernelMemoryCompatExports
         var removedAny = false;
         lock (_memoryGate)
         {
-            var removedRegions = _mappedRegions.Values
-                .Where(region =>
-                    region.Address >= address &&
+            _unmapRemovalList ??= new List<MappedRegion>();
+            _unmapRemovalList.Clear();
+
+            foreach (var region in _mappedRegions.Values)
+            {
+                if (region.Address >= address &&
                     region.Address < rangeEnd &&
                     region.Length <= rangeEnd - region.Address)
-                .ToArray();
+                {
+                    _unmapRemovalList.Add(region);
+                }
+            }
 
-            if (removedRegions.Length == 0 && !physicallyBacked)
+            if (_unmapRemovalList.Count == 0 && !physicallyBacked)
             {
                 return (int)OrbisGen2Result.ORBIS_GEN2_ERROR_NOT_FOUND;
             }
 
-            foreach (var mappedRegion in removedRegions)
+            foreach (var mappedRegion in _unmapRemovalList)
             {
                 removedAny |= _mappedRegions.Remove(mappedRegion.Address);
                 if (mappedRegion.IsFlexible)
@@ -3475,6 +3484,8 @@ public static partial class KernelMemoryCompatExports
                         : _allocatedFlexibleBytes - mappedRegion.Length;
                 }
             }
+
+            _unmapRemovalList.Clear();
         }
 
         if (physicallyBacked || removedAny)
