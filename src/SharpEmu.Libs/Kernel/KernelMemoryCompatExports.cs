@@ -3706,19 +3706,23 @@ public static partial class KernelMemoryCompatExports
 
         lock (_memoryGate)
         {
-            var candidates = _directAllocations.Values
-                .Where(block => findNext
-                    ? block.Start + block.Length > offset
-                    : offset >= block.Start && offset < block.Start + block.Length)
-                .OrderBy(block => block.Start);
-
-            foreach (var block in candidates)
+            // Performance optimization: Replaced O(N log N) LINQ sorting and allocating Where/OrderBy chain with a single-pass O(N) allocation-free manual search loop.
+            foreach (var block in _directAllocations.Values)
             {
-                found = true;
-                matchStart = block.Start;
-                matchEnd = block.Start + block.Length;
-                matchMemoryType = block.MemoryType;
-                break;
+                var isMatch = findNext
+                    ? block.Start + block.Length > offset
+                    : offset >= block.Start && offset < block.Start + block.Length;
+
+                if (isMatch)
+                {
+                    if (!found || block.Start < matchStart)
+                    {
+                        found = true;
+                        matchStart = block.Start;
+                        matchEnd = block.Start + block.Length;
+                        matchMemoryType = block.MemoryType;
+                    }
+                }
             }
         }
 

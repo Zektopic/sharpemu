@@ -48,3 +48,8 @@
 **Context:** Guest MMU / `VirtualMemory.cs` (`CopyFromRegions`, `CopyToRegions`)
 **Learning:** Sequential tracking over Spans with an external `copied` counter and range indexer (`span[copied..]`) introduces local bounds check validation overhead. Reassigning the span reference in place via `span = span.Slice(chunkLength)` eliminates this and simplifies hot loops into `!span.IsEmpty` checks.
 **Action:** Use idiomatic slice-reassignment (`span = span.Slice(length)`) instead of external integer trackers in loop conditions over `Span<T>` sequential memory operations to reduce arithmetic overhead.
+
+## 2026-10-06 - Zero-Allocation Search in KernelMemoryCompatExports
+**Context:** src/SharpEmu.Libs/Kernel/KernelMemoryCompatExports.cs
+**Learning:** Found an O(N log N) LINQ-based sorting/filtering bottleneck (`.Values.Where(...).OrderBy(...)`) inside the `KernelDirectMemoryQuery` lock. This was causing GC pressure due to enumerator and delegate allocations on a hot path during kernel HLE queries.
+**Action:** Replaced it with an O(N) allocation-free manual search loop using standard variables (`matchStart`, `matchEnd`) to natively handle uniqueness and prioritization.
