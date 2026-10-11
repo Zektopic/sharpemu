@@ -15,6 +15,8 @@ public sealed class VirtualMemory : IVirtualMemory
 
     private sealed record SnapshotCache(long Generation, VirtualMemoryRegion[] Regions);
 
+    public bool IsBackedView(ulong address) => false;
+
     public void Clear()
     {
         lock (_gate)

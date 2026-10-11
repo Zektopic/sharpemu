@@ -13,7 +13,6 @@ namespace SharpEmu.Libs.Json;
 public static class JsonExports
 {
     private const int ValueObjectSize = 0x20;
-    private const int StringObjectSize = 0x08;
     private const ulong MaximumJsonBufferSize = 16 * 1024 * 1024;
     private const int SceJsonParserErrorInvalidToken = unchecked((int)0x80920101);
     private const int SceJsonParserErrorEmptyBuffer = unchecked((int)0x80920105);
@@ -142,6 +141,25 @@ public static class JsonExports
     #pragma warning restore SHEM004
 
     [SysAbiExport(
+        Nid = "i1393UBWu1U",
+        ExportName = "_ZN3sce4Json11Initializer28setGlobalSpecialFloatHandlerEPFKNS0_5ValueENS0_12FunctionTypeEdPS3_PvPbES6_",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libSceJson")]
+    public static int InitializerSetGlobalSpecialFloatHandler(CpuContext ctx)
+    {
+        var thisAddress = ctx[CpuRegister.Rdi];
+        if (thisAddress == 0)
+        {
+            return SetReturn(ctx, (int)OrbisGen2Result.ORBIS_GEN2_ERROR_INVALID_ARGUMENT);
+        }
+
+        JsonObjectHeap.GlobalSpecialFloatHandler = ctx[CpuRegister.Rsi];
+        JsonObjectHeap.GlobalSpecialFloatHandlerContext = ctx[CpuRegister.Rdx];
+        TraceJson("Initializer.setGlobalSpecialFloatHandler", thisAddress, ctx[CpuRegister.Rsi]);
+        return SetReturn(ctx, 0);
+    }
+
+    [SysAbiExport(
         Nid = "WSOuge5IsCg",
         ExportName = "_ZN3sce4Json14InitParameter2C1Ev",
         Target = Generation.Gen5,
@@ -169,6 +187,14 @@ public static class JsonExports
     }
 
     [SysAbiExport(
+        Nid = "GvGvswb0v34",
+        ExportName = "_ZN3sce4Json14InitParameter2C2Ev",
+        Target = Generation.Gen5,
+        LibraryName = "libSceJson")]
+    public static int InitParameter2BaseConstructor(CpuContext ctx) =>
+        InitParameter2Constructor(ctx);
+
+    [SysAbiExport(
         Nid = "I2QC8PYhJWY",
         ExportName = "_ZN3sce4Json14InitParameter212setAllocatorEPNS0_12MemAllocatorEPv",
         Target = Generation.Gen5,
@@ -194,6 +220,14 @@ public static class JsonExports
     }
 
     [SysAbiExport(
+        Nid = "W72B9ylU2JA",
+        ExportName = "_ZN3sce4Json18InitParameterRtti216setAllocatorRttiEPNS0_14AllocParamRttiEPv",
+        Target = Generation.Gen5,
+        LibraryName = "libSceJson")]
+    public static int InitParameterRtti2SetAllocatorRtti(CpuContext ctx) =>
+        InitParameter2SetAllocator(ctx);
+
+    [SysAbiExport(
         Nid = "Eu95jmqn5Rw",
         ExportName = "_ZN3sce4Json14InitParameter217setFileBufferSizeEm",
         Target = Generation.Gen5,
@@ -204,6 +238,30 @@ public static class JsonExports
         if (thisAddress == 0 || !ctx.TryWriteUInt64(thisAddress + 0x10, ctx[CpuRegister.Rsi]))
         {
             return SetReturn(ctx, (int)OrbisGen2Result.ORBIS_GEN2_ERROR_INVALID_ARGUMENT);
+        }
+
+        ctx[CpuRegister.Rax] = thisAddress;
+        return (int)OrbisGen2Result.ORBIS_GEN2_OK;
+    }
+
+    [SysAbiExport(
+        Nid = "WVZBP4IyM+E",
+        ExportName = "_ZN3sce4Json14InitParameter225setSpecialFloatFormatTypeENS0_22SpecialFloatFormatTypeE",
+        Target = Generation.Gen5,
+        LibraryName = "libSceJson")]
+    public static int InitParameter2SetSpecialFloatFormatType(CpuContext ctx)
+    {
+        var thisAddress = ctx[CpuRegister.Rdi];
+        if (thisAddress == 0)
+        {
+            return SetReturn(ctx, (int)OrbisGen2Result.ORBIS_GEN2_ERROR_INVALID_ARGUMENT);
+        }
+
+        Span<byte> field = stackalloc byte[sizeof(uint)];
+        BinaryPrimitives.WriteUInt32LittleEndian(field, unchecked((uint)ctx[CpuRegister.Rsi]));
+        if (!ctx.Memory.TryWrite(thisAddress + 0x18, field))
+        {
+            return SetReturn(ctx, (int)OrbisGen2Result.ORBIS_GEN2_ERROR_MEMORY_FAULT);
         }
 
         ctx[CpuRegister.Rax] = thisAddress;
@@ -433,6 +491,13 @@ public static class JsonExports
     public static int ValueGetPosition(CpuContext ctx) => ReturnIndexedValue(ctx);
 
     [SysAbiExport(
+        Nid = "fSb2oQTNrgA",
+        ExportName = "_ZN3sce4Json5ValueC1ERKS1_",
+        Target = Generation.Gen4 | Generation.Gen5,
+        LibraryName = "libSceJson")]
+    public static int ValueCopyConstructor(CpuContext ctx) => ValueAssignment(ctx);
+
+    [SysAbiExport(
         Nid = "4zrm6VrgIAw",
         ExportName = "_ZN3sce4Json5ValueaSERKS1_",
         Target = Generation.Gen4 | Generation.Gen5,
@@ -443,7 +508,12 @@ public static class JsonExports
         var sourceAddress = ctx[CpuRegister.Rsi];
         if (destinationAddress != 0)
         {
+            var hasShadow = JsonObjectHeap.Values.TryGetValue(sourceAddress, out var shadow);
             StoreValue(ctx, destinationAddress, GetValue(sourceAddress));
+            if (hasShadow)
+                JsonObjectHeap.SetValue(destinationAddress, shadow);
+            else
+                JsonObjectHeap.RemoveValue(destinationAddress);
         }
 
         ctx[CpuRegister.Rax] = destinationAddress;
@@ -581,6 +651,7 @@ public static class JsonExports
     {
         var thisAddress = ctx[CpuRegister.Rdi];
         _values.TryRemove(thisAddress, out _);
+        JsonObjectHeap.RemoveValue(thisAddress);
         if (thisAddress != 0)
         {
             Span<byte> empty = stackalloc byte[ValueObjectSize];
@@ -625,10 +696,31 @@ public static class JsonExports
         return document.RootElement.Clone();
     }
 
-    private static JsonElement GetValue(ulong address) =>
-        address != 0 && _values.TryGetValue(address, out var state)
-            ? state.Element
-            : _nullElement;
+    private static JsonElement GetValue(ulong address)
+    {
+        if (address == 0)
+            return _nullElement;
+        if (!JsonObjectHeap.Values.TryGetValue(address, out var shadow))
+            return _values.TryGetValue(address, out var state) ? state.Element : _nullElement;
+
+        // Constructor/setter shadows and parsed trees must both survive copies.
+        object? value = shadow.Kind switch
+        {
+            JsonValueKind.Boolean => shadow.Boolean,
+            JsonValueKind.Integer => shadow.Integer,
+            JsonValueKind.UInteger => shadow.UnsignedInteger,
+            JsonValueKind.Real => shadow.Real,
+            JsonValueKind.String => shadow.Text,
+            JsonValueKind.ExplicitType => shadow.ExplicitType switch
+            {
+                1 => false, 2 => 0L, 3 => 0UL, 4 => 0.0, 5 => string.Empty,
+                6 => Array.Empty<object>(), 7 => new Dictionary<string, object>(),
+                _ => null,
+            },
+            _ => null,
+        };
+        return JsonSerializer.SerializeToElement(value);
+    }
 
     private static void StoreValue(CpuContext ctx, ulong address, JsonElement element)
     {
@@ -639,6 +731,7 @@ public static class JsonExports
 
         var clone = element.Clone();
         _values[address] = new JsonValueState(clone);
+        JsonObjectHeap.RemoveValue(address);
 
         Span<byte> mirror = stackalloc byte[ValueObjectSize];
         mirror.Clear();
