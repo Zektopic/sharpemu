@@ -53,3 +53,8 @@
 **Context:** `KernelMemoryCompatExports.cs`
 **Learning:** LINQ `Where(...).ToArray()` and `Where(...).OrderBy(...).FirstOrDefault()` chains inside the `_memoryGate` lock caused severe GC pressure during guest memory unmapping and querying. Because the critical section naturally isolates concurrent access, we can safely share a single static `List<T>` to collect unmapped regions, eliminating closures, enumerators, and per-call array allocations.
 **Action:** When filtering collections inside an existing critical section (`lock`), aggressively replace LINQ with manual `foreach` loops and cache results in static thread-safe buffers protected by the same lock.
+
+## 2026-10-25 - Chunked Guest Memory String Reading Optimization
+**Context:** src/SharpEmu.Libs/Kernel/KernelMemoryCompatExports.cs (`TryCompareStrings`, `TryCompareStringsCaseInsensitive`)
+**Learning:** Guest string reading operations for comparison previously read character by character in loops. This creates a new `TryReadCompat` call per byte, which means repeated page table lookups, locks, and bounds checks in the memory subsystem.
+**Action:** When optimizing guest memory string reading operations, replace 1-byte read loops with chunk-based reads (e.g. `stackalloc byte[128]`) and `Span<byte>`, reducing tree traversal overhead. Always include a fallback to byte-wise reads to correctly handle strings that terminate right before unmapped page boundaries without throwing false positives.
