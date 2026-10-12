@@ -5571,6 +5571,11 @@ public static partial class KernelMemoryCompatExports
         return true;
     }
 
+    /// <remarks>
+    /// Uses chunked reads to minimize locking and tree traversals in VirtualMemory.
+    /// Falls back to byte-wise reads on chunk read failures, achieving zero-allocation
+    /// acceleration of guest string comparisons.
+    /// </remarks>
     private static bool TryCompareStrings(CpuContext ctx, ulong left, ulong right, ulong limit, out int compare)
     {
         compare = 0;
@@ -5580,21 +5585,47 @@ public static partial class KernelMemoryCompatExports
         }
 
         var max = limit == ulong.MaxValue ? 1_048_576UL : Math.Min(limit, 1_048_576UL);
-        Span<byte> leftByte = stackalloc byte[1];
-        Span<byte> rightByte = stackalloc byte[1];
-        for (ulong i = 0; i < max; i++)
+        const int ChunkSize = 128;
+        Span<byte> leftChunk = stackalloc byte[ChunkSize];
+        Span<byte> rightChunk = stackalloc byte[ChunkSize];
+
+        for (ulong i = 0; i < max;)
         {
-            if (!TryReadCompat(ctx, left + i, leftByte) ||
-                !TryReadCompat(ctx, right + i, rightByte))
+            var remaining = (int)Math.Min((ulong)ChunkSize, max - i);
+            var lSpan = leftChunk.Slice(0, remaining);
+            var rSpan = rightChunk.Slice(0, remaining);
+
+            if (!TryReadCompat(ctx, left + i, lSpan) || !TryReadCompat(ctx, right + i, rSpan))
             {
-                return false;
+                Span<byte> lByte = stackalloc byte[1];
+                Span<byte> rByte = stackalloc byte[1];
+                for (ulong j = i; j < max; j++)
+                {
+                    if (!TryReadCompat(ctx, left + j, lByte) || !TryReadCompat(ctx, right + j, rByte))
+                    {
+                        return false;
+                    }
+
+                    compare = lByte[0] - rByte[0];
+                    if (compare != 0 || lByte[0] == 0 || rByte[0] == 0)
+                    {
+                        return true;
+                    }
+                }
+
+                break;
             }
 
-            compare = leftByte[0] - rightByte[0];
-            if (compare != 0 || leftByte[0] == 0 || rightByte[0] == 0)
+            for (int j = 0; j < remaining; j++)
             {
-                return true;
+                compare = lSpan[j] - rSpan[j];
+                if (compare != 0 || lSpan[j] == 0 || rSpan[j] == 0)
+                {
+                    return true;
+                }
             }
+
+            i += (ulong)remaining;
         }
 
         compare = 0;
@@ -7954,6 +7985,11 @@ public static partial class KernelMemoryCompatExports
         ctx[CpuRegister.Rax] = 0;
         return (int)OrbisGen2Result.ORBIS_GEN2_OK;
     }
+    /// <remarks>
+    /// Uses chunked reads to minimize locking and tree traversals in VirtualMemory.
+    /// Falls back to byte-wise reads on chunk read failures, achieving zero-allocation
+    /// acceleration of guest string case-insensitive comparisons.
+    /// </remarks>
     private static bool TryCompareStringsCaseInsensitive(
         CpuContext ctx,
         ulong left,
@@ -7962,30 +7998,64 @@ public static partial class KernelMemoryCompatExports
         out int compare)
     {
         compare = 0;
-        Span<byte> leftBuffer = stackalloc byte[1];
-        Span<byte> rightBuffer = stackalloc byte[1];
-        for (ulong index = 0; index < limit; index++)
+        const int ChunkSize = 128;
+        Span<byte> leftChunk = stackalloc byte[ChunkSize];
+        Span<byte> rightChunk = stackalloc byte[ChunkSize];
+
+        for (ulong i = 0; i < limit;)
         {
-            if (!TryReadCompat(ctx, left + index, leftBuffer) ||
-                !TryReadCompat(ctx, right + index, rightBuffer))
+            var remaining = (int)Math.Min((ulong)ChunkSize, limit - i);
+            var lSpan = leftChunk.Slice(0, remaining);
+            var rSpan = rightChunk.Slice(0, remaining);
+
+            if (!TryReadCompat(ctx, left + i, lSpan) || !TryReadCompat(ctx, right + i, rSpan))
             {
-                return false;
+                Span<byte> lByte = stackalloc byte[1];
+                Span<byte> rByte = stackalloc byte[1];
+                for (ulong j = i; j < limit; j++)
+                {
+                    if (!TryReadCompat(ctx, left + j, lByte) || !TryReadCompat(ctx, right + j, rByte))
+                    {
+                        return false;
+                    }
+
+                    var lValue = lByte[0];
+                    var lLower = ToAsciiLower(lValue);
+                    var rLower = ToAsciiLower(rByte[0]);
+                    if (lLower != rLower)
+                    {
+                        compare = lLower - rLower;
+                        return true;
+                    }
+
+                    if (lValue == 0)
+                    {
+                        return true;
+                    }
+                }
+
+                break;
             }
 
-            var leftValue = leftBuffer[0];
-            var rightValue = rightBuffer[0];
-            var leftLower = ToAsciiLower(leftValue);
-            var rightLower = ToAsciiLower(rightValue);
-            if (leftLower != rightLower)
+            for (int j = 0; j < remaining; j++)
             {
-                compare = leftLower - rightLower;
-                return true;
+                var lValue = lSpan[j];
+                var lLower = ToAsciiLower(lValue);
+                var rLower = ToAsciiLower(rSpan[j]);
+
+                if (lLower != rLower)
+                {
+                    compare = lLower - rLower;
+                    return true;
+                }
+
+                if (lValue == 0)
+                {
+                    return true;
+                }
             }
 
-            if (leftValue == 0)
-            {
-                return true;
-            }
+            i += (ulong)remaining;
         }
 
         return true;
