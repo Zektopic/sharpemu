@@ -44,6 +44,7 @@ internal static unsafe partial class VulkanVideoPresenter
         private uint _maxComputeWorkGroupInvocations;
         private ulong _minStorageBufferOffsetAlignment = 1;
         private bool _supportsIndependentBlend;
+        private bool _supportsDualSourceBlend;
         private bool _supportsDepthBiasClamp;
         private bool _supportsShaderSignedZeroInfNanPreserveFloat32;
         private uint _maxColorAttachments;
@@ -608,10 +609,15 @@ internal static unsafe partial class VulkanVideoPresenter
             _supportsShaderSignedZeroInfNanPreserveFloat32 =
                 floatControls.ShaderSignedZeroInfNanPreserveFloat32;
             SetNativeSubgroupCapabilities(subgroup.SubgroupSize, subgroup.SupportedStages);
+            SetMipStatisticsCapabilities(true, subgroup.SupportedOperations, subgroup.SupportedStages);
             _canRequireComputeSubgroup32 =
                 subgroup.SubgroupSize != RdnaSubgroupSize &&
                 subgroupSizeControl.MinSubgroupSize <= RdnaSubgroupSize &&
                 subgroupSizeControl.MaxSubgroupSize >= RdnaSubgroupSize &&
+                (subgroupSizeControl.RequiredSubgroupSizeStages & ShaderStageFlags.ComputeBit) != 0;
+            _canRequireComputeSubgroup64 =
+                subgroupSizeControl.MinSubgroupSize <= Wave64SubgroupSize &&
+                subgroupSizeControl.MaxSubgroupSize >= Wave64SubgroupSize &&
                 (subgroupSizeControl.RequiredSubgroupSizeStages & ShaderStageFlags.ComputeBit) != 0;
             _maxComputeWorkgroupSubgroups = subgroupSizeControl.MaxComputeWorkgroupSubgroups;
             // MoltenVK reports a zero OpArrayLength for storage buffers bound through push
@@ -750,7 +756,13 @@ internal static unsafe partial class VulkanVideoPresenter
                 queueInfoCount = 2;
             }
             _vk.GetPhysicalDeviceFeatures(_physicalDevice, out var supportedFeatures);
+            if (!supportedFeatures.FragmentStoresAndAtomics)
+            {
+                ShaderCompiler.Resources.ResourceMaterializer.RecordMipStatistics = false;
+            }
+
             _supportsIndependentBlend = supportedFeatures.IndependentBlend;
+            _supportsDualSourceBlend = supportedFeatures.DualSrcBlend;
             _supportsDepthBiasClamp = supportedFeatures.DepthBiasClamp;
             _supportsDepthBounds = supportedFeatures.DepthBounds;
             _supportsShaderClipDistance = supportedFeatures.ShaderClipDistance;
@@ -759,6 +771,7 @@ internal static unsafe partial class VulkanVideoPresenter
             {
                 DepthBounds = supportedFeatures.DepthBounds,
                 IndependentBlend = supportedFeatures.IndependentBlend,
+                DualSrcBlend = supportedFeatures.DualSrcBlend,
                 VertexPipelineStoresAndAtomics = supportedFeatures.VertexPipelineStoresAndAtomics,
                 FragmentStoresAndAtomics = supportedFeatures.FragmentStoresAndAtomics,
                 ShaderInt64 = supportedFeatures.ShaderInt64,
@@ -809,6 +822,13 @@ internal static unsafe partial class VulkanVideoPresenter
                 Console.Error.WriteLine(
                     "[LOADER][WARN] GPU does not support vertexPipelineStoresAndAtomics/fragmentStoresAndAtomics " +
                     "translated shaders using storage buffers in vertex/fragment stages may fail.");
+            }
+
+            if (!supportedFeatures.DualSrcBlend)
+            {
+                Console.Error.WriteLine(
+                    "[LOADER][WARN] GPU does not support dualSrcBlend " +
+                    "blends that read SRC1 factors fall back to a single source.");
             }
 
             if (!supportedFeatures.ShaderImageGatherExtended)
@@ -945,6 +965,7 @@ internal static unsafe partial class VulkanVideoPresenter
             var supportsNullDescriptor = robustness2Features.NullDescriptor;
             var supportsRobustness2 = supportsRobustImageAccess2 || supportsNullDescriptor;
             _canRequireComputeSubgroup32 &= vulkan13Features.SubgroupSizeControl;
+            _canRequireComputeSubgroup64 &= vulkan13Features.SubgroupSizeControl;
             SetSharedInt64AtomicsCapability(supportsSharedInt64Atomics);
             if (!supportsSharedInt64Atomics)
             {
@@ -1157,7 +1178,7 @@ internal static unsafe partial class VulkanVideoPresenter
                     SType = StructureType.PhysicalDeviceVulkan13Features,
                     DynamicRendering = true,
                     Synchronization2 = true,
-                    SubgroupSizeControl = _canRequireComputeSubgroup32,
+                    SubgroupSizeControl = _canRequireComputeSubgroup32 || _canRequireComputeSubgroup64,
                     PNext = renderingChain,
                 };
                 var features2 = new PhysicalDeviceFeatures2
