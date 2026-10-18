@@ -53,3 +53,8 @@
 **Context:** `KernelMemoryCompatExports.cs`
 **Learning:** LINQ `Where(...).ToArray()` and `Where(...).OrderBy(...).FirstOrDefault()` chains inside the `_memoryGate` lock caused severe GC pressure during guest memory unmapping and querying. Because the critical section naturally isolates concurrent access, we can safely share a single static `List<T>` to collect unmapped regions, eliminating closures, enumerators, and per-call array allocations.
 **Action:** When filtering collections inside an existing critical section (`lock`), aggressively replace LINQ with manual `foreach` loops and cache results in static thread-safe buffers protected by the same lock.
+
+## 2026-10-18 - PhysicalVirtualMemory LINQ Array Allocation
+**Context:** [Guest MMU / src/SharpEmu.Core/Memory/PhysicalVirtualMemory.cs]
+**Learning:** O(N) LINQ chains like `.Where().ToArray()` inside hot paths for collection manipulation (like memory unmapping in `TryUnmapBacked`) cause unnecessary delegate, enumerator, and heap array allocations.
+**Action:** Replace LINQ filters on `List<T>` with standard `for` loops (using reverse iteration when removing elements) to achieve zero allocations and reduce GC pressure.
