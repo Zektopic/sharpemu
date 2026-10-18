@@ -1388,6 +1388,7 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         }
     }
 
+    /// <remarks>Performance optimization: Replaced O(N) LINQ `.Where().ToArray()` with a manual reverse `for` loop to eliminate delegate, enumerator, and array allocations during frequent memory unmapping operations in the guest MMU hot path.</remarks>
     public bool TryUnmapBacked(ulong address, ulong size)
     {
         _gate.EnterWriteLock();
@@ -1399,17 +1400,25 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
             }
 
             var end = address + size;
-            foreach (var region in _regions.Where(r => r.IsBackedView && r.VirtualAddress < end &&
-                         address < r.VirtualAddress + r.Size).ToArray())
+            for (var i = _regions.Count - 1; i >= 0; i--)
             {
+                var region = _regions[i];
+                if (!region.IsBackedView || region.VirtualAddress >= end || address >= region.VirtualAddress + region.Size)
+                {
+                    continue;
+                }
+
                 var oldEnd = region.VirtualAddress + region.Size;
-                _regions.Remove(region);
+                _regions.RemoveAt(i);
                 if (region.VirtualAddress < address)
                 {
                     InsertRegionSorted(new MemoryRegion
                     {
-                        VirtualAddress = region.VirtualAddress, Size = address - region.VirtualAddress,
-                        IsBackedView = true, IsExecutable = region.IsExecutable, Protection = region.Protection,
+                        VirtualAddress = region.VirtualAddress,
+                        Size = address - region.VirtualAddress,
+                        IsBackedView = true,
+                        IsExecutable = region.IsExecutable,
+                        Protection = region.Protection,
                     });
                 }
 
@@ -1417,8 +1426,11 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
                 {
                     InsertRegionSorted(new MemoryRegion
                     {
-                        VirtualAddress = end, Size = oldEnd - end, IsBackedView = true,
-                        IsExecutable = region.IsExecutable, Protection = region.Protection,
+                        VirtualAddress = end,
+                        Size = oldEnd - end,
+                        IsBackedView = true,
+                        IsExecutable = region.IsExecutable,
+                        Protection = region.Protection,
                     });
                 }
             }
