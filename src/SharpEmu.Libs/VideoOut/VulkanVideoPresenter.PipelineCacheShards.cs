@@ -22,20 +22,33 @@ internal static unsafe partial class VulkanVideoPresenter
         private const double SlowShardLoadMilliseconds = 50;
 
         private string? _pipelineCacheShardDirectory;
-        private readonly Dictionary<string, DriverCacheShard> _pipelineCacheShards = new();
+        internal readonly record struct CacheShardKey(bool IsCompute, ulong Hash1, ulong Hash2, string? Identity1, string? Identity2) : IEquatable<CacheShardKey>;
+
+        private readonly Dictionary<CacheShardKey, DriverCacheShard> _pipelineCacheShards = new();
         private static readonly bool LegacyShaderGroups =
             Environment.GetEnvironmentVariable("SHARPEMU_VK_PIPELINE_CACHE_LEGACY_SHARDS") == "1";
 
-        private string ComputeCacheKey(ulong guestHash, ulong module) =>
+        private CacheShardKey ComputeCacheKey(ulong guestHash, ulong module) =>
             !LegacyShaderGroups && _shaderModuleCacheIdentities.TryGetValue(module, out var identity)
-                ? $"c2-{identity}" : $"c-{guestHash:X16}";
+                ? new CacheShardKey(true, 0, 0, identity, null) : new CacheShardKey(true, guestHash, 0, null, null);
 
-        private string GraphicsCacheKey(ulong vertexHash, ulong pixelHash, ulong vertexModule, ulong pixelModule)
+        private CacheShardKey GraphicsCacheKey(ulong vertexHash, ulong pixelHash, ulong vertexModule, ulong pixelModule)
         {
-            if (!LegacyShaderGroups && _shaderModuleCacheIdentities.TryGetValue(vertexModule, out var vertex) &&
-                (pixelModule == 0 || _shaderModuleCacheIdentities.ContainsKey(pixelModule)))
-                return $"g2-{vertex}-{(pixelModule == 0 ? "none" : _shaderModuleCacheIdentities[pixelModule])}";
-            return $"g-{vertexHash:X16}-{pixelHash:X16}";
+            if (!LegacyShaderGroups && _shaderModuleCacheIdentities.TryGetValue(vertexModule, out var vertex))
+            {
+                if (pixelModule == 0)
+                    return new CacheShardKey(false, 0, 0, vertex, "none");
+                if (_shaderModuleCacheIdentities.TryGetValue(pixelModule, out var pixel))
+                    return new CacheShardKey(false, 0, 0, vertex, pixel);
+            }
+            return new CacheShardKey(false, vertexHash, pixelHash, null, null);
+        }
+
+        private static string FormatCacheKey(CacheShardKey key)
+        {
+            if (key.IsCompute)
+                return key.Identity1 != null ? $"c2-{key.Identity1}" : $"c-{key.Hash1:X16}";
+            return key.Identity1 != null ? $"g2-{key.Identity1}-{key.Identity2}" : $"g-{key.Hash1:X16}-{key.Hash2:X16}";
         }
 
         // MoltenVK recompiles cached MSL libraries during vkCreatePipelineCache.
@@ -43,12 +56,12 @@ internal static unsafe partial class VulkanVideoPresenter
         // compiling every previously visited scene before the first frame.
         // Vulkan still validates the complete shader/layout key inside each blob;
         // content hashes only select a storage bucket, never a pipeline to reuse.
-        private PipelineCache GetGuestPipelineCache(string key)
+        private PipelineCache GetGuestPipelineCache(CacheShardKey key)
             => ResolveGuestPipelineCache(GetGuestPipelineCacheSource(key));
 
         // The dictionary belongs to the render thread. Only the lazy native
         // creation runs on compiler workers; variants share one initialization.
-        private Lazy<PipelineCache>? GetGuestPipelineCacheSource(string key)
+        private Lazy<PipelineCache>? GetGuestPipelineCacheSource(CacheShardKey key)
         {
             if (_pipelineCacheShardDirectory is null) return null;
             if (_pipelineCacheShards.TryGetValue(key, out var existing))
@@ -57,7 +70,7 @@ internal static unsafe partial class VulkanVideoPresenter
                 return existing.Cache;
             }
 
-            var shard = new DriverCacheShard { Path = Path.Combine(_pipelineCacheShardDirectory, key + ".bin"), Dirty = true };
+            var shard = new DriverCacheShard { Path = Path.Combine(_pipelineCacheShardDirectory, FormatCacheKey(key) + ".bin"), Dirty = true };
             shard.Cache = new Lazy<PipelineCache>(() => LoadGuestPipelineCache(key, shard));
             _pipelineCacheShards.Add(key, shard);
             return shard.Cache;
@@ -69,7 +82,7 @@ internal static unsafe partial class VulkanVideoPresenter
             return cache.Handle != 0 ? cache : _pipelineCache;
         }
 
-        private PipelineCache LoadGuestPipelineCache(string key, DriverCacheShard shard)
+        private PipelineCache LoadGuestPipelineCache(CacheShardKey key, DriverCacheShard shard)
         {
             var path = shard.Path;
             byte[] data = [];
@@ -90,7 +103,7 @@ internal static unsafe partial class VulkanVideoPresenter
                 result = TryCreatePipelineCache([], out cache);
             if (result != Result.Success)
             {
-                Console.Error.WriteLine($"[LOADER][WARN] Vulkan cache shard unavailable: key={key} result={result}");
+                Console.Error.WriteLine($"[LOADER][WARN] Vulkan cache shard unavailable: key={FormatCacheKey(key)} result={result}");
                 return default;
             }
 
@@ -101,7 +114,7 @@ internal static unsafe partial class VulkanVideoPresenter
             if (QueryPipelineCacheSize(cache) is { } size)
                 shard.SavedBytes = size;
             if (milliseconds >= SlowShardLoadMilliseconds)
-                Console.Error.WriteLine($"[LOADER][INFO] Vulkan cache shard loaded: key={key} bytes={data.Length} ms={milliseconds:F1}");
+                Console.Error.WriteLine($"[LOADER][INFO] Vulkan cache shard loaded: key={FormatCacheKey(key)} bytes={data.Length} ms={milliseconds:F1}");
             return cache;
         }
 
