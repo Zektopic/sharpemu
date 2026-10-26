@@ -1561,6 +1561,7 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         }
     }
 
+    /// <remarks>Performance optimization: Zero-allocation reverse iteration for frequent guest MMU memory unmapping operations.</remarks>
     public bool TryUnmapBacked(ulong address, ulong size)
     {
         using (GuestMemoryProfile.Measure(GuestMemoryProfile.Operation.VirtualUnmapWriteLockAcquisition))
