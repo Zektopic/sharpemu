@@ -8,3 +8,4 @@
 
 - Optimized TryUnmapBacked memory unmapping hot path allocations.
 - Zero-allocation Pipeline Cache Keys in VulkanVideoPresenter.
+- Optimized guest memory string comparison zero-allocation hot paths in KernelMemoryCompatExports.
