@@ -1222,6 +1222,7 @@ public sealed unsafe class GuestBufferCache : IGuestBufferStore, IDisposable
     private const int EagerStrikeLimit = 3;
     private const long EagerMuteBatches = 4096;
     private readonly Dictionary<ulong, HotWindow> _hotWindows = new();
+    private readonly List<ulong> _expiredHotWindows = new();
     private readonly HashSet<ulong> _eagerCandidates = new();
     private readonly List<PendingDownload> _eagerDownloads = new();
     private long _batchSerial;
@@ -1320,11 +1321,24 @@ public sealed unsafe class GuestBufferCache : IGuestBufferStore, IDisposable
 
         if ((_batchSerial & 1023) == 0)
         {
-            foreach (var key in _hotWindows.Where(pair => _batchSerial - pair.Value.LastHit > HotWindowLifetime && _batchSerial >= pair.Value.MutedUntil)
-                         .Select(pair => pair.Key).ToList())
+            // <remarks>
+            // Performance rationale: Pre-allocated _expiredHotWindows list prevents GC allocation spikes
+            // by eliminating the .Where().Select().ToList() LINQ enumerators in this graphics hot-path cleanup sweep.
+            // </remarks>
+            foreach (var pair in _hotWindows)
+            {
+                if (_batchSerial - pair.Value.LastHit > HotWindowLifetime && _batchSerial >= pair.Value.MutedUntil)
+                {
+                    _expiredHotWindows.Add(pair.Key);
+                }
+            }
+
+            foreach (var key in _expiredHotWindows)
             {
                 _hotWindows.Remove(key);
             }
+
+            _expiredHotWindows.Clear();
         }
 
         if (_eagerCandidates.Count == 0)
