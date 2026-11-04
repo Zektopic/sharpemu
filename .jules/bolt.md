@@ -9,3 +9,8 @@
 - Optimized TryUnmapBacked memory unmapping hot path allocations.
 - Zero-allocation Pipeline Cache Keys in VulkanVideoPresenter.
 - Optimized guest memory string comparison zero-allocation hot paths in KernelMemoryCompatExports.
+
+## 2026-10-26 - Explicit Record Struct HashCode for Zero-Allocation Cache Keys
+**Context:** `src/SharpEmu.Libs/VideoOut/VulkanVideoPresenter.PipelineCacheShards.cs`
+**Learning:** The default compiler-generated `Equals` and `GetHashCode` for C# `record struct` types that contain reference types (like strings) can introduce hidden GC allocations (e.g. boxing) during high-frequency dictionary lookups, such as the PSO cache checks for Vulkan shaders.
+**Action:** When designing cache keys for dictionaries in high-frequency rendering loops, explicitly implement `IEquatable<T>` and `GetHashCode()` using `HashCode.Combine` (or explicit `HashCode.Add`) and allocation-free string comparisons (e.g. `string.Equals` with `StringComparison.Ordinal`) instead of relying on the default record struct implementation.
