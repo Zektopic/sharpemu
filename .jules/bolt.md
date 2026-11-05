@@ -1,11 +1,4 @@
-## 2023-11-20 - LINQ in Hot Paths
-
-**Context:** `src/SharpEmu.Libs/Gpu/Buffers/GuestBufferCache.cs`
-
-**Learning:** `OnBatchSubmitted` uses LINQ (`.Where(...).Select(...).ToList()`) to remove expired entries from `_hotWindows` every 1024 frames. This allocates enumerators, delegates, and intermediate lists in a graphics hot path.
-
-**Action:** Replace `Where().Select().ToList()` pattern for Dictionary key removal with an allocation-free array pool or manually pre-allocated list/stack loop, ensuring no GC pressure is generated during routine garbage collection sweeps of internal emulator caches.
-
-- Optimized TryUnmapBacked memory unmapping hot path allocations.
-- Zero-allocation Pipeline Cache Keys in VulkanVideoPresenter.
-- Optimized guest memory string comparison zero-allocation hot paths in KernelMemoryCompatExports.
+## 2026-10-27 - PSO Caching Memory Optimization
+**Context:** `src/SharpEmu.Libs/VideoOut/VulkanVideoPresenter.PipelineCacheShards.cs`
+**Learning:** The C# compiler-generated default equality methods for `readonly record struct` types containing reference fields can sometimes introduce hidden GC allocations (boxing) during frequent dictionary lookups if they aren't structured carefully or when relying on older reflection-based equality checks under the hood. Using an explicit `Equals` with `IEquatable<T>` and explicitly defining `GetHashCode` with `HashCode.Combine` ensures we absolutely avoid any boxing or reflection paths, resulting in zero-allocation fast path dictionary lookups. Also, deferred string formatting to cache misses avoids creating unnecessary strings in the hot path.
+**Action:** In C# hot paths, explicitly implement `IEquatable<T>` and `GetHashCode()` (using `HashCode.Combine`) for `readonly record struct` types that contain reference fields like strings and are used in dictionary lookups.
