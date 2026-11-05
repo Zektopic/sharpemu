@@ -22,7 +22,19 @@ internal static unsafe partial class VulkanVideoPresenter
         private const double SlowShardLoadMilliseconds = 50;
 
         private string? _pipelineCacheShardDirectory;
-        internal readonly record struct CacheShardKey(bool IsCompute, ulong Hash1, ulong Hash2, string? Identity1, string? Identity2) : IEquatable<CacheShardKey>;
+        internal readonly record struct CacheShardKey(bool IsCompute, ulong Hash1, ulong Hash2, string? Identity1, string? Identity2) : IEquatable<CacheShardKey>
+        {
+            /// <remarks>Explicit equality implementation to prevent default compiler-generated boxing and GC allocations in dictionary lookups.</remarks>
+            public bool Equals(CacheShardKey other) =>
+                IsCompute == other.IsCompute &&
+                Hash1 == other.Hash1 &&
+                Hash2 == other.Hash2 &&
+                Identity1 == other.Identity1 &&
+                Identity2 == other.Identity2;
+
+            /// <remarks>Explicit hash code implementation to prevent default compiler-generated boxing and GC allocations in dictionary lookups.</remarks>
+            public override int GetHashCode() => HashCode.Combine(IsCompute, Hash1, Hash2, Identity1, Identity2);
+        }
 
         private readonly Dictionary<CacheShardKey, DriverCacheShard> _pipelineCacheShards = new();
         private static readonly bool LegacyShaderGroups =
