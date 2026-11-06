@@ -9,3 +9,8 @@
 - Optimized TryUnmapBacked memory unmapping hot path allocations.
 - Zero-allocation Pipeline Cache Keys in VulkanVideoPresenter.
 - Optimized guest memory string comparison zero-allocation hot paths in KernelMemoryCompatExports.
+
+## 2023-11-06 - [Explicit HashCode for PSO Cache Keys]
+**Context:** src/SharpEmu.Libs/VideoOut/VulkanVideoPresenter.PipelineCacheShards.cs (CacheShardKey struct)
+**Learning:** Default struct equality in C# uses Reflection to generate HashCode and compare equality when the struct contains reference types like `string`. In hot paths like dictionary lookups during Vulkan Pipeline State Object (PSO) caching, this introduces boxing allocations and hidden GC pauses, causing frame-time spikes.
+**Action:** Always implement `IEquatable<T>` explicitly and override `GetHashCode()` using `HashCode.Combine` for `readonly record struct` keys that contain reference fields like strings in dictionary lookups on performance-critical paths.
