@@ -19,3 +19,8 @@
 **Context:** `src/SharpEmu.Libs/VideoOut/VulkanVideoPresenter.PipelineCacheShards.cs`
 **Learning:** The default compiler-generated `Equals` and `GetHashCode` for C# `record struct` types that contain reference types (like strings) can introduce hidden GC allocations (e.g. boxing) during high-frequency dictionary lookups, such as the PSO cache checks for Vulkan shaders.
 **Action:** When designing cache keys for dictionaries in high-frequency rendering loops, explicitly implement `IEquatable<T>` and `GetHashCode()` using `HashCode.Combine` (or explicit `HashCode.Add`) and allocation-free string comparisons (e.g. `string.Equals` with `StringComparison.Ordinal`) instead of relying on the default record struct implementation.
+
+## 2026-10-27 - PSO Caching Memory Optimization
+**Context:** `src/SharpEmu.Libs/VideoOut/VulkanVideoPresenter.PipelineCacheShards.cs`
+**Learning:** The C# compiler-generated default equality methods for `readonly record struct` types containing reference fields can sometimes introduce hidden GC allocations (boxing) during frequent dictionary lookups if they aren't structured carefully or when relying on older reflection-based equality checks under the hood. Using an explicit `Equals` with `IEquatable<T>` and explicitly defining `GetHashCode` with `HashCode.Combine` ensures we absolutely avoid any boxing or reflection paths, resulting in zero-allocation fast path dictionary lookups. Also, deferred string formatting to cache misses avoids creating unnecessary strings in the hot path.
+**Action:** In C# hot paths, explicitly implement `IEquatable<T>` and `GetHashCode()` (using `HashCode.Combine`) for `readonly record struct` types that contain reference fields like strings and are used in dictionary lookups.
