@@ -29,3 +29,8 @@
 **Context:** src/SharpEmu.Libs/VideoOut/VulkanVideoPresenter.PipelineCacheShards.cs (CacheShardKey struct)
 **Learning:** Default struct equality in C# uses Reflection to generate HashCode and compare equality when the struct contains reference types like `string`. In hot paths like dictionary lookups during Vulkan Pipeline State Object (PSO) caching, this introduces boxing allocations and hidden GC pauses, causing frame-time spikes.
 **Action:** Always implement `IEquatable<T>` explicitly and override `GetHashCode()` using `HashCode.Combine` for `readonly record struct` keys that contain reference fields like strings in dictionary lookups on performance-critical paths.
+
+## 2026-11-07 - Hidden Boxing Allocations in Record Struct Dictionary Lookups
+**Context:** Graphics Pipeline (Vulkan/MoltenVK) / `VulkanVideoPresenter.PipelineCacheShards.cs`
+**Learning:** In C#, declaring a `readonly record struct` that contains nullable reference type fields (like `string?`) forces the compiler-generated `Equals` and `GetHashCode` implementations to potentially box those references when checking equality via default generic comparers. When used as a key in `Dictionary<TKey, TValue>` for high-frequency operations like Vulkan Pipeline State Object (PSO) caching, this introduces hidden per-frame garbage collection allocations.
+**Action:** Always explicitly implement `IEquatable<T>` and override `GetHashCode` using `HashCode.Combine(...)` for hot-path struct keys containing reference types to guarantee zero-allocation structural equality.
