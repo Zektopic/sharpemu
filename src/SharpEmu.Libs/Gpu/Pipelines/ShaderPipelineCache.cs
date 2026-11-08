@@ -252,7 +252,8 @@ internal sealed partial class ShaderPipelineCache : IShaderPipelineProvider
                     ? new StageCompileOptions { VertexInfo = vertexInfo, RequiredVertexOutputCount = (int)attributeCount }
                     : new StageCompileOptions
                     {
-                        MeshInfo = mesh, RequiredVertexOutputCount = (int)attributeCount,
+                        MeshInfo = mesh,
+                        RequiredVertexOutputCount = (int)attributeCount,
                         MeshOutputLocationMask = pixelSource is null ? 0u : pixelStage.Program?.InputLocationMask,
                     },
                 ref pushDataCursor,
@@ -776,19 +777,23 @@ internal sealed partial class ShaderPipelineCache : IShaderPipelineProvider
     {
         using var profileScope = RenderPhaseProfile.MeasureDetail(RenderPhaseProfile.Phase.PipelineCreation);
         // The lookup fills objects this thread reuses for every draw; only a new pipeline gets its own.
-        var lookup = _graphicsLookup ??= new GraphicsPipelineKey
-        {
-            Rendering = new PipelineRenderingState(),
-            VertexInput = new PipelineVertexInputState(),
-            StaticParameters = new PipelineStaticParameters(),
-        };
-        lookup.Rendering.Reset();
-        lookup.VertexInput.Reset();
-        lookup.StaticParameters.Reset();
+        _graphicsLookupRendering ??= new PipelineRenderingState();
+        _graphicsLookupVertexInput ??= new PipelineVertexInputState();
+        _graphicsLookupStaticParameters ??= new PipelineStaticParameters();
+        _graphicsLookupRendering.Reset();
+        _graphicsLookupVertexInput.Reset();
+        _graphicsLookupStaticParameters.Reset();
         FillGraphicsState(colors, in depth, vertexInput, pixelInput, context, in rendering, topology, primitiveRestartEnabled, disableBlending,
-            vertexProgram, pixelProgram, _host.NoAttachmentSampleCounts, lookup.Rendering, lookup.StaticParameters, lookup.VertexInput);
-        lookup.VertexProgramId = vertexProgram.Id;
-        lookup.PixelProgramId = pixelInput is not null ? pixelProgram.Id : 0;
+            vertexProgram, pixelProgram, _host.NoAttachmentSampleCounts, _graphicsLookupRendering, _graphicsLookupStaticParameters, _graphicsLookupVertexInput);
+
+        var lookup = new GraphicsPipelineKey(
+            _graphicsLookupRendering!,
+            vertexProgram.Id,
+            pixelInput is not null ? pixelProgram.Id : 0,
+            _graphicsLookupVertexInput!,
+            _graphicsLookupStaticParameters!
+        );
+
         lock (_pipelineGate)
         {
             if (_graphicsPipelines.TryGetValue(lookup, out var cached))
@@ -830,7 +835,11 @@ internal sealed partial class ShaderPipelineCache : IShaderPipelineProvider
     }
 
     [ThreadStatic]
-    private static GraphicsPipelineKey? _graphicsLookup;
+    private static PipelineRenderingState? _graphicsLookupRendering;
+    [ThreadStatic]
+    private static PipelineVertexInputState? _graphicsLookupVertexInput;
+    [ThreadStatic]
+    private static PipelineStaticParameters? _graphicsLookupStaticParameters;
 
     // The full static state of one graphics pipeline from the draw's targets, registers and programs.
     internal static GraphicsPipelineDescription BuildGraphicsDescription(
@@ -999,14 +1008,13 @@ internal sealed partial class ShaderPipelineCache : IShaderPipelineProvider
         return (vertexStage, pixelStage);
     }
 
-    internal static GraphicsPipelineKey KeyOf(GraphicsPipelineDescription description) => new()
-    {
-        Rendering = description.Rendering,
-        VertexProgramId = description.VertexProgram.Id,
-        PixelProgramId = description.PixelInfo is not null ? description.PixelProgram.Id : 0,
-        VertexInput = description.VertexInput,
-        StaticParameters = description.StaticParameters,
-    };
+    internal static GraphicsPipelineKey KeyOf(GraphicsPipelineDescription description) => new(
+        description.Rendering,
+        description.VertexProgram.Id,
+        description.PixelInfo is not null ? description.PixelProgram.Id : 0,
+        description.VertexInput,
+        description.StaticParameters
+    );
 
     private static void FillVertexInputState(VertexInputInfo info, PipelineVertexInputState state)
     {
