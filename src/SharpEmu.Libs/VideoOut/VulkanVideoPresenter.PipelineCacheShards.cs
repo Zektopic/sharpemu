@@ -24,15 +24,14 @@ internal static unsafe partial class VulkanVideoPresenter
         private string? _pipelineCacheShardDirectory;
         internal readonly record struct CacheShardKey(bool IsCompute, ulong Hash1, ulong Hash2, string? Identity1, string? Identity2) : IEquatable<CacheShardKey>
         {
-            /// <remarks>Explicit equality implementation to prevent default compiler-generated boxing and GC allocations in dictionary lookups.</remarks>
-            public bool Equals(CacheShardKey other) =>
-                IsCompute == other.IsCompute &&
-                Hash1 == other.Hash1 &&
-                Hash2 == other.Hash2 &&
-                Identity1 == other.Identity1 &&
-                Identity2 == other.Identity2;
+            /// <summary>
+            /// Fast explicit equality to elide reference-field boxing on dictionary lookups.
+            /// </summary>
+            public bool Equals(CacheShardKey other) => IsCompute == other.IsCompute && Hash1 == other.Hash1 && Hash2 == other.Hash2 && Identity1 == other.Identity1 && Identity2 == other.Identity2;
 
-            /// <remarks>Explicit hash code implementation to prevent default compiler-generated boxing and GC allocations in dictionary lookups.</remarks>
+            /// <summary>
+            /// Fast explicit hash code generation using HashCode.Combine.
+            /// </summary>
             public override int GetHashCode() => HashCode.Combine(IsCompute, Hash1, Hash2, Identity1, Identity2);
         }
 
