@@ -229,22 +229,12 @@ public sealed class PipelineVertexInputState : IEquatable<PipelineVertexInputSta
     }
 }
 
-public sealed class GraphicsPipelineKey : IEquatable<GraphicsPipelineKey>
-{
-    public required PipelineRenderingState Rendering { get; init; }
-    // Settable for the lookup key reused across draws; a key in the cache is never changed.
-    public ulong VertexProgramId { get; set; }
-    public ulong PixelProgramId { get; set; }
-    public required PipelineVertexInputState VertexInput { get; init; }
-    public required PipelineStaticParameters StaticParameters { get; init; }
-
-    public bool Equals(GraphicsPipelineKey? other) =>
-        other is not null && Rendering.Equals(other.Rendering) && VertexProgramId == other.VertexProgramId && PixelProgramId == other.PixelProgramId &&
-        VertexInput.Equals(other.VertexInput) && StaticParameters.Equals(other.StaticParameters);
-
-    public override bool Equals(object? obj) => Equals(obj as GraphicsPipelineKey);
-
-    public override int GetHashCode() => HashCode.Combine(Rendering, VertexProgramId, PixelProgramId, VertexInput, StaticParameters);
-}
+public readonly record struct GraphicsPipelineKey(
+    PipelineRenderingState Rendering,
+    ulong VertexProgramId,
+    ulong PixelProgramId,
+    PipelineVertexInputState VertexInput,
+    PipelineStaticParameters StaticParameters
+);
 
 public readonly record struct ComputePipelineKey(ulong ComputeProgramId);
