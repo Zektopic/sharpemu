@@ -3,6 +3,7 @@
 
 using SharpEmu.Libs.Gpu.Images;
 using SharpEmu.Libs.Gpu.Scheduling;
+using SharpEmu.ShaderCompiler;
 using SharpEmu.ShaderCompiler.Resources;
 using ResourceSnapshot = SharpEmu.ShaderCompiler.Resources.ResourceSnapshot;
 
@@ -15,6 +16,7 @@ public enum ShaderStageKind
     Pixel,
     Compute,
     Mesh,
+    TessellationEvaluation,
 }
 
 public enum ImageResourceClass : byte
@@ -43,7 +45,10 @@ public class ShaderProgramInfo
     public const int NoScalarRegister = -1;
 
     public ShaderStageKind Stage { get; init; }
+    public int TessellationFactorBuffer { get; init; } = -1;
+    public bool UsesTessellationLocalDataRing { get; init; }
     public ulong Hash { get; init; }
+    public Pipelines.IShaderFrontend? Frontend { get; init; }
     public uint UserDataBase { get; init; }
     public uint UserDataCount { get; init; }
     public uint ParameterExportMask { get; init; }
@@ -61,6 +66,7 @@ public class ShaderProgramInfo
     public Pipelines.ConstantFill? ConstantFill { get; init; }
     public Pipelines.BoundedFill? BoundedFill { get; init; }
     public Pipelines.BoundedCopy? BoundedCopy { get; init; }
+    public bool StoresUniformValues { get; init; }
     public BufferResourceInfo[] Buffers { get; init; } = [];
     public ImageResourceInfo[] Images { get; init; } = [];
     public int SamplerCount { get; init; }
@@ -73,6 +79,10 @@ public class ShaderProgramInfo
     // The specialized resources and the binding layout the module was compiled against.
     public SpecializedResourceInfo? Resources { get; init; }
     public BindingLayout? Bindings { get; init; }
+
+    // What the host resolves for each record of each callee, by callee slot, when the program reads its records'
+    // descriptors at run time (ShaderCompileRequest.CallRecordCallees).
+    public IReadOnlyList<CallRecordCallee> CallRecordCallees { get; init; } = [];
 }
 
 // One shader stage bound to a draw or dispatch: its program, the resources it reads and its code base.
@@ -83,6 +93,36 @@ public readonly record struct ShaderStageResources(ShaderProgramInfo? Program, R
     public DispatchThreadLimits? ThreadLimits { get; init; }
 
     public MeshDrawParameters? MeshDraw { get; init; }
+
+    public uint[]? TessellationData { get; init; }
+
+    public void WriteTessellationData(Span<uint> shaderData)
+    {
+        if (Program?.Bindings is not { UsesTessellationData: true } layout) return;
+        if (TessellationData is not { Length: (int)Gen5TessellationData.DwordCount } data ||
+            shaderData.Length != layout.ShaderDataDwordCount)
+        {
+            throw SubmissionScheduler.Fatal("The tessellation stage has missing runtime data or invalid shader data.");
+        }
+
+        data.CopyTo(shaderData[(int)layout.TessellationDataDword..]);
+    }
+
+    // The distinct nonzero arguments of this dispatch's call records (ShaderCallLibrary.Arguments): the module compares a
+    // site's argument relative to them, so one module serves every position of the tables.
+    public ulong[]? CallArguments { get; init; }
+
+    // The addresses of this dispatch's callees (Gen5ShaderCallLinker.CallTargets): the module tests records against them,
+    // so one module serves every placement of the functions.
+    public ulong[]? CallTargets { get; init; }
+
+    // Every (target, argument) record of this dispatch's call tables when its program reads its records' descriptors at
+    // run time (ShaderProgramInfo.CallRecordCallees).
+    public (ulong Target, ulong Argument)[]? CallRecords { get; init; }
+
+    // The buffers those records' callees compute V#s for from their arguments (CallRecordBufferWords), which the host makes
+    // resident with the dispatch's other device-address ranges.
+    public DeviceAddressRange[]? CallRecordRanges { get; init; }
 
     public void WriteDispatchThreadLimits(Span<uint> shaderData)
     {
@@ -96,6 +136,23 @@ public readonly record struct ShaderStageResources(ShaderProgramInfo? Program, R
         shaderData[offset] = limits.X;
         shaderData[offset + 1] = limits.Y;
         shaderData[offset + 2] = limits.Z;
+    }
+
+    public void WriteCallData(Span<uint> shaderData)
+    {
+        if (Program?.Bindings is not { } layout || layout.CallArgumentCount == 0 && layout.CallTargetCount == 0) return;
+        if (shaderData.Length != layout.ShaderDataDwordCount || (CallArguments?.Length ?? 0) != layout.CallArgumentCount ||
+            (CallTargets?.Length ?? 0) != layout.CallTargetCount)
+        {
+            throw SubmissionScheduler.Fatal("The linked shader call has invalid shader data.");
+        }
+
+        var offset = (int)layout.CallArgumentsDword;
+        foreach (var address in (CallArguments ?? []).Concat(CallTargets ?? []))
+        {
+            shaderData[offset++] = (uint)address;
+            shaderData[offset++] = (uint)(address >> 32);
+        }
     }
 
     public void WriteMeshDrawParameters(Span<uint> shaderData)
@@ -153,6 +210,7 @@ public readonly record struct ClipSpaceTransform(
 
 public sealed class VertexInputInfo
 {
+    public Pipelines.TessellationPipelineStages? Tessellation { get; init; }
     public const int MaxBuffers = 32;
 
     public VertexInputBuffer[] Buffers { get; init; } = [];
@@ -164,7 +222,15 @@ public sealed class VertexInputInfo
     public uint ScratchDwords { get; init; }
     public uint PositionExportControl { get; init; }
     public ClipSpaceTransform ClipSpace { get; init; }
+    public int StartInstanceUserData { get; set; } = -1;
     public ShaderStageResources Stage { get; set; }
+
+    public VertexInputInfo WithoutStage()
+    {
+        var copy = (VertexInputInfo)MemberwiseClone();
+        copy.Stage = default;
+        return copy;
+    }
 }
 
 public sealed record MeshDrawConfiguration
@@ -232,6 +298,13 @@ public sealed class PixelInputInfo
     public ShaderStageResources Stage { get; set; }
 
     public bool PositionXY => PositionX && PositionY;
+
+    public PixelInputInfo WithoutStage()
+    {
+        var copy = (PixelInputInfo)MemberwiseClone();
+        copy.Stage = default;
+        return copy;
+    }
 }
 
 public sealed class ComputeInputInfo

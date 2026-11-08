@@ -1360,6 +1360,31 @@ public static partial class Gen5SpirvTranslator
                             GetRawSource(instruction, 1)),
                         GetRawSource(instruction, 2));
                     break;
+                case "VPermB32":
+                {
+                    var first = GetRawSource(instruction, 0);
+                    var second = GetRawSource(instruction, 1);
+                    var selectors = GetRawSource(instruction, 2);
+                    result = UInt(0);
+                    for (var shift = 0u; shift < 32; shift += 8)
+                    {
+                        var selector = BitwiseAnd(ShiftRightLogical(selectors, UInt(shift)), UInt(255));
+                        var byteSelection = UCmp(SpirvOp.ULessThan, selector, UInt(8));
+                        var source = SelectU(byteSelection,
+                            SelectU(UCmp(SpirvOp.ULessThan, selector, UInt(4)), second, first),
+                            SelectU(UCmp(SpirvOp.ULessThan, selector, UInt(10)), second, first));
+                        var byteShift = ShiftLeftLogical(BitwiseAnd(selector, UInt(3)), UInt(3));
+                        var selectedByte = BitwiseAnd(ShiftRightLogical(source, byteShift), UInt(255));
+                        var signShift = SelectU(Equal(BitwiseAnd(selector, UInt(1)), 0), UInt(15), UInt(31));
+                        var signByte = BitwiseAnd(ISubU(UInt(0),
+                            BitwiseAnd(ShiftRightLogical(source, signShift), UInt(1))), UInt(255));
+                        var value = SelectU(byteSelection, selectedByte,
+                            SelectU(UCmp(SpirvOp.ULessThan, selector, UInt(12)), signByte,
+                                SelectU(Equal(selector, 12), UInt(0), UInt(255))));
+                        result = BitwiseOr(result, ShiftLeftLogical(value, UInt(shift)));
+                    }
+                    break;
+                }
                 case "VPermlane16B32":
                     result = EmitPermlane16(instruction, exchangeRows: false);
                     break;
@@ -1910,8 +1935,7 @@ public static partial class Gen5SpirvTranslator
             }
 
             var m0 = LoadS(M0ScalarRegister);
-            _moveRelativeOffsets ??= Ir.Gen5MoveRelativeOffsets.Analyze(_request.Program);
-            if (_moveRelativeOffsets.TryGetValue(instruction.Pc, out var offsets))
+            if (TryGetMoveRelativeOffsets(instruction.Pc, out var offsets))
             {
                 return TryEmitBoundedMoveRelative(instruction, destination, m0, offsets, out error);
             }
@@ -3145,11 +3169,19 @@ public static partial class Gen5SpirvTranslator
             if (instruction.Opcode == "SGetpcB64")
             {
                 {
-                    // The draw's shader base comes from push data, so one module serves every address.
-                    var (baseLow, baseHigh) = LoadShaderBase();
-                    var next = IAdd64(
-                        Pair64(baseLow, baseHigh),
-                        ULong(unchecked(instruction.ProgramOffset + (ulong)(instruction.Words.Count * sizeof(uint)))));
+                    // The draw's shader base comes from push data, so one module serves every address; a linked function
+                    // reads its own address from the call targets.
+                    var size = (ulong)(instruction.Words.Count * sizeof(uint));
+                    uint next;
+                    if (instruction.Control is ShaderFunctionPcControl function && _callTargetSlots is not null)
+                    {
+                        next = IAdd64(CallTarget(function.FunctionAddress), ULong(unchecked(function.FunctionOffset + size)));
+                    }
+                    else
+                    {
+                        var (baseLow, baseHigh) = LoadShaderBase();
+                        next = IAdd64(Pair64(baseLow, baseHigh), ULong(unchecked(instruction.ProgramOffset + size)));
+                    }
                     StoreS(destination, Narrow(next));
                     StoreS(destination + 1, Narrow(ShiftRightLogical64(next, ULong(32))));
                     return true;

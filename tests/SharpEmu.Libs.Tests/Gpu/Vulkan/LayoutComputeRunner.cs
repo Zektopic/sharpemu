@@ -216,12 +216,28 @@ internal sealed unsafe class LayoutComputeRunner : IDisposable
         uint[]? dispatchThreadLimits = null,
         uint[]? meshDrawParameters = null,
         ulong[]? bufferRanges = null,
-        uint[]? memoryOffsets = null)
+        uint[]? memoryOffsets = null,
+        ulong[]? callArguments = null,
+        ulong[]? callTargets = null,
+        uint[]? tessellationData = null)
     {
         var vk = _harness.Vk;
         var device = _harness.Device.Device;
         var layout = _request.Bindings;
         var shaderData = new uint[layout.ShaderDataDwordCount];
+        if (layout.UsesBufferLengths && boundBuffers.TryGetValue(DescriptorBindingKind.Buffers, out var bounded))
+            for (var index = 0; index < bounded.Length; index++)
+                shaderData[layout.BufferLengthsDword + (uint)index] = checked((uint)(
+                    (bufferRanges is not null && index < bufferRanges.Length ? bufferRanges[index] : bounded[index].Size) / sizeof(uint)));
+        if (layout.UsesTessellationData)
+        {
+            if (tessellationData is not { Length: (int)Gen5TessellationData.DwordCount })
+            {
+                throw new InvalidOperationException("The tessellation kernel requires its runtime data.");
+            }
+
+            tessellationData.CopyTo(shaderData, (int)layout.TessellationDataDword);
+        }
         for (var index = 0; index < layout.UserDataRegisters.Count; index++)
         {
             var register = layout.UserDataRegisters[index];
@@ -249,6 +265,47 @@ internal sealed unsafe class LayoutComputeRunner : IDisposable
         {
             if (meshDrawParameters is not { Length: 6 }) throw new InvalidOperationException("The mesh draw requires six parameters.");
             meshDrawParameters.CopyTo(shaderData, (int)layout.MeshDrawParametersDword);
+        }
+        if (layout.CallArgumentCount != 0)
+        {
+            if (callArguments?.Length != layout.CallArgumentCount) throw new InvalidOperationException("The dispatch requires its call arguments.");
+            for (var index = 0; index < callArguments.Length; index++)
+            {
+                shaderData[layout.CallArgumentsDword + index * 2] = (uint)callArguments[index];
+                shaderData[layout.CallArgumentsDword + index * 2 + 1] = (uint)(callArguments[index] >> 32);
+            }
+        }
+        if (layout.CallTargetCount != 0)
+        {
+            if (callTargets?.Length != layout.CallTargetCount) throw new InvalidOperationException("The dispatch requires its call targets.");
+            for (var index = 0; index < callTargets.Length; index++)
+            {
+                shaderData[layout.CallTargetsDword + index * 2] = (uint)callTargets[index];
+                shaderData[layout.CallTargetsDword + index * 2 + 1] = (uint)(callTargets[index] >> 32);
+            }
+        }
+
+        if (layout.UsesTableBlock)
+        {
+            var bound = boundBuffers.TryGetValue(DescriptorBindingKind.Buffers, out var tableBuffers) ? tableBuffers : [];
+            var table = flattenedTable ?? [];
+            var block = new uint[layout.TableFlattenedDword + table.Length];
+            block[0] = (uint)table.Length;
+            for (var index = 0; index < layout.BufferCount; index++)
+            {
+                var buffer = index < bound.Length ? bound[index] : CreateBuffer(16);
+                var record = (int)(BindingLayout.TableBlockHeaderDwords + (uint)index * BindingLayout.TableBufferDwords);
+                var range = bufferRanges is not null && index < bufferRanges.Length ? bufferRanges[index] : buffer.Size;
+                block[record] = (uint)buffer.DeviceAddress;
+                block[record + 1] = (uint)(buffer.DeviceAddress >> 32);
+                block[record + 2] = (uint)(range >> 2);
+                block[record + 3] = memoryOffsets is not null && index < memoryOffsets.Length ? memoryOffsets[index] & 0xFF : 0;
+            }
+
+            table.CopyTo(block, (int)layout.TableFlattenedDword);
+            var blockAddress = CreateBuffer(MemoryMarshal.AsBytes<uint>(block)).DeviceAddress;
+            shaderData[layout.TableBlockDword] = (uint)blockAddress;
+            shaderData[layout.TableBlockDword + 1] = (uint)(blockAddress >> 32);
         }
 
         var setLayout = _setLayout;
@@ -283,6 +340,12 @@ internal sealed unsafe class LayoutComputeRunner : IDisposable
             else if (descriptor.Kind == DescriptorBindingKind.ShaderData && !boundBuffers.ContainsKey(descriptor.Kind))
             {
                 buffers = [CreateBuffer(MemoryMarshal.AsBytes<uint>(shaderData))];
+            }
+            else if (descriptor.Kind == DescriptorBindingKind.DeviceAddressFallback && !boundBuffers.ContainsKey(descriptor.Kind))
+            {
+                // As the buffer cache does: the address of a readable buffer.
+                ulong[] fallback = [CreateBuffer(256).DeviceAddress, 0];
+                buffers = [CreateBuffer(MemoryMarshal.AsBytes<ulong>(fallback))];
             }
             else if (!boundBuffers.TryGetValue(descriptor.Kind, out buffers!))
             {

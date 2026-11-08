@@ -46,6 +46,13 @@ internal static unsafe partial class VulkanVideoPresenter
         }
 
         private readonly Dictionary<CacheShardKey, DriverCacheShard> _pipelineCacheShards = new();
+
+        // Linked programs' pipelines (Bindings.CallTargetCount != 0) keep a cache file of their own, one per caller, when the
+        // other pipelines keep none: the driver can spend minutes on one, and its own shader cache does not keep pipelines
+        // that large. The program cache keeps the callees of the caller's newest ready program (ShaderCallUnionStore), so a
+        // later session links that program again and finds its pipeline here. SHARPEMU_VK_PIPELINE_CACHE=0 keeps them
+        // in memory.
+        private string? _linkedPipelineCacheDirectory;
         private static readonly bool LegacyShaderGroups =
             Environment.GetEnvironmentVariable("SHARPEMU_VK_PIPELINE_CACHE_LEGACY_SHARDS") == "1";
 
@@ -97,13 +104,49 @@ internal static unsafe partial class VulkanVideoPresenter
             return shard.Cache;
         }
 
+        // A linked compile's own pipeline cache, created from its caller's cache file; null when shards keep every pipeline or
+        // the linked cache is off. No other compile uses it, so it is written once its pipeline is compiled.
+        private DriverCacheShard? CreateLinkedPipelineCache(ulong callerHash)
+        {
+            if (_pipelineCacheShardDirectory is not null || _linkedPipelineCacheDirectory is not { } directory)
+            {
+                return null;
+            }
+
+            var key = $"l-{callerHash:X16}";
+            var shard = new DriverCacheShard { Path = Path.Combine(directory, key + ".bin"), Dirty = true };
+            shard.Cache = new Lazy<PipelineCache>(() => LoadGuestPipelineCache(key, shard));
+            return shard;
+        }
+
+        // A linked compile's cache is written to its caller's file once its pipeline is registered, since a forced close
+        // saves nothing, so the file holds the caller's newest pipeline; the cache is destroyed either way.
+        private void ReleaseLinkedPipelineCache(DriverCacheShard? shard, ulong callerHash, bool save)
+        {
+            if (shard is null || !shard.Cache.IsValueCreated || shard.Cache.Value.Handle == 0)
+            {
+                return;
+            }
+
+            var cache = shard.Cache.Value;
+            if (save)
+            {
+                SaveDriverPipelineCache(cache, shard.Path, MaxPipelineCacheBytes, out _);
+            }
+
+            _vk.DestroyPipelineCache(_device, cache, null);
+        }
+
         private PipelineCache ResolveGuestPipelineCache(Lazy<PipelineCache>? source)
         {
             var cache = source?.Value ?? default;
             return cache.Handle != 0 ? cache : _pipelineCache;
         }
 
-        private PipelineCache LoadGuestPipelineCache(CacheShardKey key, DriverCacheShard shard)
+        private PipelineCache LoadGuestPipelineCache(CacheShardKey key, DriverCacheShard shard) =>
+            LoadGuestPipelineCache(FormatCacheKey(key), shard);
+
+        private PipelineCache LoadGuestPipelineCache(string key, DriverCacheShard shard)
         {
             var path = shard.Path;
             byte[] data = [];
@@ -124,7 +167,7 @@ internal static unsafe partial class VulkanVideoPresenter
                 result = TryCreatePipelineCache([], out cache);
             if (result != Result.Success)
             {
-                Console.Error.WriteLine($"[LOADER][WARN] Vulkan cache shard unavailable: key={FormatCacheKey(key)} result={result}");
+                Console.Error.WriteLine($"[LOADER][WARN] Vulkan cache shard unavailable: key={key} result={result}");
                 return default;
             }
 
@@ -135,7 +178,7 @@ internal static unsafe partial class VulkanVideoPresenter
             if (QueryPipelineCacheSize(cache) is { } size)
                 shard.SavedBytes = size;
             if (milliseconds >= SlowShardLoadMilliseconds)
-                Console.Error.WriteLine($"[LOADER][INFO] Vulkan cache shard loaded: key={FormatCacheKey(key)} bytes={data.Length} ms={milliseconds:F1}");
+                Console.Error.WriteLine($"[LOADER][INFO] Vulkan cache shard loaded: key={key} bytes={data.Length} ms={milliseconds:F1}");
             return cache;
         }
 

@@ -233,6 +233,7 @@ public readonly record struct GraphicsPipelineKey(
     PipelineRenderingState Rendering,
     ulong VertexProgramId,
     ulong PixelProgramId,
+    TessellationPipelineStages? Tessellation,
     PipelineVertexInputState VertexInput,
     PipelineStaticParameters StaticParameters
 );

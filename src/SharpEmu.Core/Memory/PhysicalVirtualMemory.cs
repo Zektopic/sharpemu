@@ -950,35 +950,6 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
             Console.Error.WriteLine($"[VMEM][ALLOC_SEARCH] start=0x{desiredAddress:X16} cursor=0x{cursor:X16} " +
                 $"size=0x{alignedSize:X} alignment=0x{effectiveAlignment:X} executable={executable}");
 
-        // macOS needs alignment over-allocation; Linux uses exact-address search.
-        if (OperatingSystem.IsMacOS())
-        {
-            var reserveSize = effectiveAlignment > PageSize
-                ? alignedSize + effectiveAlignment
-                : alignedSize;
-            try
-            {
-                var posixAddress = AllocateAt(cursor, reserveSize, executable, allowAlternative: true);
-                if (posixAddress != 0)
-                {
-                    var alignedBase = AlignUp(posixAddress, effectiveAlignment);
-                    if (alignedBase + alignedSize <= posixAddress + reserveSize)
-                    {
-                        actualAddress = alignedBase;
-                        UpdateAllocationSearchCursor(desiredAddress, effectiveAlignment, executable, alignedBase + alignedSize);
-                        return true;
-                    }
-
-                    ReleaseUntrackedAllocation(posixAddress);
-                }
-            }
-            catch
-            {
-            }
-
-            return false;
-        }
-
         for (var attempt = 0; attempt < 0x10000; attempt++)
         {
             if (cursor == 0 || ulong.MaxValue - cursor < alignedSize)
@@ -1046,40 +1017,6 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         finally
         {
             _gate.ExitReadLock();
-        }
-    }
-
-    private void ReleaseUntrackedAllocation(ulong address)
-    {
-        ulong allocationSize = 0;
-        _gate.EnterWriteLock();
-        try
-        {
-            for (var i = 0; i < _regions.Count; i++)
-            {
-                if (_regions[i].VirtualAddress == address)
-                {
-                    allocationSize = _regions[i].Size;
-                    _allocationGaps.Remove(_regions[i].VirtualAddress);
-                    _regions.RemoveAt(i);
-                    break;
-                }
-            }
-        }
-        finally
-        {
-            _gate.ExitWriteLock();
-        }
-
-        Interlocked.Increment(ref _mappingGeneration);
-        if (_ownsStartupAddressReservations && WindowsGuestAddressReservation.ContainsImageRange(address, allocationSize))
-        {
-            if (allocationSize != 0)
-                WindowsGuestAddressReservation.DecommitImageRange(address, allocationSize);
-        }
-        else
-        {
-            _hostMemory.Free(address);
         }
     }
 
@@ -2293,6 +2230,17 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         // their owners dirtied before the copy; guest addresses are
         // host-identical, matching the tracker's fault addresses.
         GuestImageWriteTracker.NotifyManagedWrite(virtualAddress, (ulong)source.Length);
+        if (!source.IsEmpty && _backedSpace is { } backed && !_disposed)
+        {
+            GuestGpuMemoryHook.PrepareEmulatorWrite(virtualAddress, (ulong)source.Length);
+            if (backed.TryWriteSingleView(virtualAddress, source))
+            {
+                GuestGpuMemoryHook.NoteEmulatorWrite(virtualAddress, (ulong)source.Length);
+                NotifyGuestWriteWatch(virtualAddress, source);
+                return true;
+            }
+        }
+
         GuestGpuMemoryHook.MarkCpuWrite(virtualAddress, (ulong)source.Length);
         var written = TryWriteCore(virtualAddress, source);
 
@@ -2304,13 +2252,6 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
 
     private bool TryWriteCore(ulong virtualAddress, ReadOnlySpan<byte> source)
     {
-        if (!source.IsEmpty && _backedSpace is { } backed && !_disposed &&
-            backed.TryWriteSingleView(virtualAddress, source))
-        {
-            NotifyGuestWriteWatch(virtualAddress, source);
-            return true;
-        }
-
         var requiresExclusiveAccess = false;
         _gate.EnterReadLock();
         try
@@ -2407,6 +2348,17 @@ public sealed unsafe class PhysicalVirtualMemory : IVirtualMemory, IGuestMemoryA
         // Match TryWrite's managed-write notification before touching an
         // identity-mapped guest page protected by the image tracker.
         GuestImageWriteTracker.NotifyManagedWrite(destinationAddress, length);
+        if (_backedSpace is { } backed && !_disposed)
+        {
+            GuestGpuMemoryHook.PrepareEmulatorWrite(destinationAddress, length);
+            if (backed.TryCopySingleView(destinationAddress, sourceAddress, length))
+            {
+                GuestGpuMemoryHook.NoteEmulatorWrite(destinationAddress, length);
+                NotifyBackedWriteWatch(destinationAddress, length);
+                return true;
+            }
+        }
+
         GuestGpuMemoryHook.MarkCpuWrite(destinationAddress, length);
         var copied = TryCopyCore(destinationAddress, sourceAddress, length);
 

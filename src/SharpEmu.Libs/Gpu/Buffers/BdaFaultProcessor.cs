@@ -1,6 +1,7 @@
 // Copyright (C) 2026 SharpEmu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+using SharpEmu.Libs.VideoOut;
 using System.Runtime.InteropServices;
 using SharpEmu.HLE.GpuMemory;
 using SharpEmu.Libs.Gpu.Scheduling;
@@ -18,6 +19,8 @@ public sealed unsafe class BdaFaultProcessor : IDisposable
     private const ulong PageFaultAreaSize = MaxPageFaults * sizeof(ulong);
 
     private static long _reportedFaults;
+    private static long _unlinkedCalls;
+    private static readonly bool StrictCompute = Environment.GetEnvironmentVariable("SHARPEMU_STRICT_COMPUTE") != "0";
     private readonly GpuDeviceInfo _device;
     private readonly SubmissionScheduler _scheduler;
     private readonly GuestBufferCache _cache;
@@ -213,12 +216,21 @@ public sealed unsafe class BdaFaultProcessor : IDisposable
         VulkanSynchronization.PipelineBarrier(vk,
             command, PipelineStageFlags.AllCommandsBit, PipelineStageFlags.ComputeShaderBit, DependencyFlags.ByRegionBit,
             0, null, 1, &preBarrier, 0, null);
-        vk.CmdBindPipeline(command, PipelineBindPoint.Compute, _pipeline);
+        using (RenderPhaseProfile.MeasureDetail(RenderPhaseProfile.Phase.VulkanCommands))
+        {
+            vk.CmdBindPipeline(command, PipelineBindPoint.Compute, _pipeline);
+        }
         var set = _sets[_currentArea];
-        vk.CmdBindDescriptorSets(command, PipelineBindPoint.Compute, _pipelineLayout, 0, 1, &set, 0, null);
+        using (RenderPhaseProfile.MeasureDetail(RenderPhaseProfile.Phase.VulkanCommands))
+        {
+            vk.CmdBindDescriptorSets(command, PipelineBindPoint.Compute, _pipelineLayout, 0, 1, &set, 0, null);
+        }
         NativeBindingEpoch.Advance();
         var threads = _pageCount / 32;
-        vk.CmdDispatch(command, (uint)((threads + 63) / 64), 1, 1);
+        using (RenderPhaseProfile.MeasureDetail(RenderPhaseProfile.Phase.VulkanCommands))
+        {
+            vk.CmdDispatch(command, (uint)((threads + 63) / 64), 1, 1);
+        }
         VulkanSynchronization.PipelineBarrier(vk,
             command, PipelineStageFlags.ComputeShaderBit, PipelineStageFlags.AllCommandsBit, DependencyFlags.ByRegionBit,
             0, null, 1, &postBarrier, 0, null);
@@ -238,7 +250,15 @@ public sealed unsafe class BdaFaultProcessor : IDisposable
                 _traceDownloadBuffer.Invalidate(area * 256UL, 64);
                 var record = MemoryMarshal.Cast<byte, uint>(_traceDownloadBuffer.Mapped.Slice((int)area * 256, 64));
                 if (record[8] == 2)
-                    throw SubmissionScheduler.Fatal($"The shader called an unlinked function: hash=0x{((ulong)record[10] << 32 | record[9]):X16} pc=0x{record[11]:X} target=0x{((ulong)record[13] << 32 | record[12]):X16}.");
+                {
+                    var message = $"The shader called an unlinked function: hash=0x{((ulong)record[10] << 32 | record[9]):X16} pc=0x{record[11]:X} target=0x{((ulong)record[13] << 32 | record[12]):X16}.";
+                    if (StrictCompute) throw SubmissionScheduler.Fatal(message);
+                    // The wave that found no record ended at the call; like any other compute failure outside strict mode
+                    // the dispatch's result can be incomplete.
+                    var unlinked = Interlocked.Increment(ref _unlinkedCalls);
+                    if (unlinked <= 16 || (unlinked & (unlinked - 1)) == 0)
+                        Console.Error.WriteLine($"[GPU][WARN][UNLINKED_CALL] {message} count={unlinked}. The waves that made the call were ended; images can be incorrect. SHARPEMU_STRICT_COMPUTE=0 is set.");
+                }
                 if (record[0] != 0)
                     Console.Error.WriteLine($"[GPU][DEVICE_ADDRESS_FAULT] scan_tick={scanTick} hash=0x{((ulong)record[2] << 32 | record[1]):X16} pc=0x{record[3]:X} address=0x{((ulong)record[5] << 32 | record[4]):X16} stage={record[6]}");
             }
