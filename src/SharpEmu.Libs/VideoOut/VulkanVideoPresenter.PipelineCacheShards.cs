@@ -22,7 +22,32 @@ internal static unsafe partial class VulkanVideoPresenter
         private const double SlowShardLoadMilliseconds = 50;
 
         private string? _pipelineCacheShardDirectory;
-        internal readonly record struct CacheShardKey(bool IsCompute, ulong Hash1, ulong Hash2, string? Identity1, string? Identity2) : IEquatable<CacheShardKey>;
+        /// <remarks>
+        /// Performance rationale: Explicit implementation of GetHashCode and Equals prevents string boxing
+        /// and hidden GC allocations during PSO dictionary lookups compared to the default record struct implementation.
+        /// </remarks>
+        internal readonly record struct CacheShardKey(bool IsCompute, ulong Hash1, ulong Hash2, string? Identity1, string? Identity2) : IEquatable<CacheShardKey>
+        {
+            public bool Equals(CacheShardKey other)
+            {
+                return IsCompute == other.IsCompute &&
+                       Hash1 == other.Hash1 &&
+                       Hash2 == other.Hash2 &&
+                       string.Equals(Identity1, other.Identity1, StringComparison.Ordinal) &&
+                       string.Equals(Identity2, other.Identity2, StringComparison.Ordinal);
+            }
+
+            public override int GetHashCode()
+            {
+                var hash = new HashCode();
+                hash.Add(IsCompute);
+                hash.Add(Hash1);
+                hash.Add(Hash2);
+                hash.Add(Identity1);
+                hash.Add(Identity2);
+                return hash.ToHashCode();
+            }
+        }
 
         private readonly Dictionary<CacheShardKey, DriverCacheShard> _pipelineCacheShards = new();
         private static readonly bool LegacyShaderGroups =
