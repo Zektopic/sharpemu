@@ -34,3 +34,8 @@
 **Context:** Graphics Pipeline (Vulkan/MoltenVK) / `VulkanVideoPresenter.PipelineCacheShards.cs`
 **Learning:** In C#, declaring a `readonly record struct` that contains nullable reference type fields (like `string?`) forces the compiler-generated `Equals` and `GetHashCode` implementations to potentially box those references when checking equality via default generic comparers. When used as a key in `Dictionary<TKey, TValue>` for high-frequency operations like Vulkan Pipeline State Object (PSO) caching, this introduces hidden per-frame garbage collection allocations.
 **Action:** Always explicitly implement `IEquatable<T>` and override `GetHashCode` using `HashCode.Combine(...)` for hot-path struct keys containing reference types to guarantee zero-allocation structural equality.
+
+## 2024-05-18 - Avoid default record struct equality boxing
+**Context:** GraphicsPipelineKey and ComputePipelineKey in src/SharpEmu.Libs/Gpu/Pipelines/PipelineKeys.cs
+**Learning:** The default `Equals` and `GetHashCode` methods generated for `readonly record struct` box the struct when it contains reference fields (like `TessellationPipelineStages? Tessellation` or string representations) when used frequently in collections like `ConcurrentDictionary`. This creates hidden GC allocations in hot paths like Vulkan PSO lookups.
+**Action:** When creating record structs for dictionary keys in hot paths, always explicitly implement `IEquatable<T>` and provide custom `Equals` and `GetHashCode` (using `HashCode.Combine`) to eliminate boxing overhead.

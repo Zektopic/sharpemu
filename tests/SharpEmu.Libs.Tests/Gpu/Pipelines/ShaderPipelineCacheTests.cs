@@ -333,8 +333,14 @@ public sealed class ShaderPipelineCacheTests : IDisposable
         {
             banks.Context.BlendControls[0] = new BlendRegisters
             {
-                Enable = true, ColorSourceFactor = 4, ColorDestinationFactor = 5, ColorFunction = 1,
-                AlphaSourceFactor = 2, AlphaDestinationFactor = 3, AlphaFunction = 2, SeparateAlpha = true,
+                Enable = true,
+                ColorSourceFactor = 4,
+                ColorDestinationFactor = 5,
+                ColorFunction = 1,
+                AlphaSourceFactor = 2,
+                AlphaDestinationFactor = 3,
+                AlphaFunction = 2,
+                SeparateAlpha = true,
             };
             banks.Context.RasterMode.CullBack = true;
             banks.Context.RasterMode.FrontFaceClockwise = true;
@@ -395,8 +401,12 @@ public sealed class ShaderPipelineCacheTests : IDisposable
     {
         var blend = new BlendRegisters
         {
-            Enable = enable, ColorSourceFactor = colorSource, ColorDestinationFactor = colorDestination,
-            AlphaSourceFactor = alphaSource, AlphaDestinationFactor = alphaDestination, SeparateAlpha = true,
+            Enable = enable,
+            ColorSourceFactor = colorSource,
+            ColorDestinationFactor = colorDestination,
+            AlphaSourceFactor = alphaSource,
+            AlphaDestinationFactor = alphaDestination,
+            SeparateAlpha = true,
         };
 
         Assert.Equal(expected, ShaderPipelineCache.UsesSecondBlendSource(blend));
@@ -407,7 +417,10 @@ public sealed class ShaderPipelineCacheTests : IDisposable
     {
         var blend = new BlendRegisters
         {
-            Enable = true, ColorSourceFactor = 1, AlphaSourceFactor = 17, AlphaDestinationFactor = 18,
+            Enable = true,
+            ColorSourceFactor = 1,
+            AlphaSourceFactor = 17,
+            AlphaDestinationFactor = 18,
             SeparateAlpha = false,
         };
         Assert.False(ShaderPipelineCache.UsesSecondBlendSource(blend));
@@ -475,9 +488,15 @@ public sealed class ShaderPipelineCacheTests : IDisposable
 
         var otherVertex = new GraphicsPipelineDescription
         {
-            Rendering = description.Rendering, VertexInput = description.VertexInput, VertexInfo = description.VertexInfo,
-            VertexProgram = new ShaderProgram(0x99), VertexStage = description.VertexStage, PixelInfo = description.PixelInfo,
-            PixelProgram = description.PixelProgram, PixelStage = description.PixelStage, StaticParameters = description.StaticParameters,
+            Rendering = description.Rendering,
+            VertexInput = description.VertexInput,
+            VertexInfo = description.VertexInfo,
+            VertexProgram = new ShaderProgram(0x99),
+            VertexStage = description.VertexStage,
+            PixelInfo = description.PixelInfo,
+            PixelProgram = description.PixelProgram,
+            PixelStage = description.PixelStage,
+            StaticParameters = description.StaticParameters,
         };
         Assert.NotEqual(key, ShaderPipelineCache.KeyOf(otherVertex));
 
@@ -485,9 +504,15 @@ public sealed class ShaderPipelineCacheTests : IDisposable
         otherRendering.ColorFormats[0] = Format.R16G16B16A16Sfloat;
         var renderingChanged = new GraphicsPipelineDescription
         {
-            Rendering = otherRendering, VertexInput = description.VertexInput, VertexInfo = description.VertexInfo,
-            VertexProgram = description.VertexProgram, VertexStage = description.VertexStage, PixelInfo = description.PixelInfo,
-            PixelProgram = description.PixelProgram, PixelStage = description.PixelStage, StaticParameters = description.StaticParameters,
+            Rendering = otherRendering,
+            VertexInput = description.VertexInput,
+            VertexInfo = description.VertexInfo,
+            VertexProgram = description.VertexProgram,
+            VertexStage = description.VertexStage,
+            PixelInfo = description.PixelInfo,
+            PixelProgram = description.PixelProgram,
+            PixelStage = description.PixelStage,
+            StaticParameters = description.StaticParameters,
         };
         Assert.NotEqual(key, ShaderPipelineCache.KeyOf(renderingChanged));
         Assert.Equal(key, ShaderPipelineCache.KeyOf(With(description, description.StaticParameters)));
@@ -527,17 +552,17 @@ public sealed class ShaderPipelineCacheTests : IDisposable
         var rectangle = ShaderPipelineCache.KeyOf(description);
         rectangle.StaticParameters.Topology = PrimitiveTopology.PatchList;
         var tessellated = ShaderPipelineCache.KeyOf(description);
-        tessellated.Tessellation = new(new ShaderProgram(10), new ShaderProgram(11), 4);
+        tessellated = tessellated with { Tessellation = new(new ShaderProgram(10), new ShaderProgram(11), 4) };
         Assert.NotEqual(rectangle, tessellated);
 
         var other = ShaderPipelineCache.KeyOf(description);
-        other.Tessellation = tessellated.Tessellation;
+        other = other with { Tessellation = tessellated.Tessellation };
         Assert.Equal(tessellated, other);
-        other.Tessellation = tessellated.Tessellation with { Control = new ShaderProgram(12) };
+        other = other with { Tessellation = tessellated.Tessellation with { Control = new ShaderProgram(12) } };
         Assert.NotEqual(tessellated, other);
-        other.Tessellation = tessellated.Tessellation with { Evaluation = new ShaderProgram(12) };
+        other = other with { Tessellation = tessellated.Tessellation with { Evaluation = new ShaderProgram(12) } };
         Assert.NotEqual(tessellated, other);
-        other.Tessellation = tessellated.Tessellation with { InputControlPoints = 3 };
+        other = other with { Tessellation = tessellated.Tessellation with { InputControlPoints = 3 } };
         Assert.NotEqual(tessellated, other);
     }
 
